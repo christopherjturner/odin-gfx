@@ -41,7 +41,7 @@ void main() {
 
   float tilt = radians(23.4);
   vec3 pole = normalize(vec3(sin(tilt), cos(tilt), 0.0)); // tilted from +Y towards +X
-  dir = rotate_axis(dir, pole, game_time * 0.01);
+  dir = rotate_axis(dir, pole, game_time * 0.001);
 
   mat4 v = view;
   v[3] = vec4(0.0, -1.0 * (scale*0.25), 0.0, 1.0);
@@ -81,6 +81,21 @@ float hash(vec2 p) {
   return fract(p.x * p.y);
 }
 
+
+vec3 stars(vec3 dir, float threshold, float grid, float t) {
+    float star_mask = pow(saturate(dir.y), 4.0) * 1.0;
+    vec2 star_p = dir.xz / max(0.001, (dir.y + 1.2)); // cheap "projection"
+    float h = hash(floor(star_p * grid));
+    float star = clamp((h - threshold) / (1.0 - threshold), 0.0, 1.0);
+    star = pow(star, 10.0);
+
+    float twinkle = 0.5 + 0.5 * sin(t * 10.0 * h);
+
+    vec3 star_color = vec3(1.0) * star * star_mask;
+    return star_color;
+}
+
+
 void main() {
   float height = dir.y;
   vec3 horizon = get_horizon_color(time);
@@ -89,9 +104,8 @@ void main() {
   float blend = height * height;
   vec3 sky_color = mix(horizon, zenith, blend);
 
+  /*
   float star_mask = pow(saturate(height), 4.0) * 1.0;
-
-
   float grid = 800.0;
   float threshold = 0.9985;
   vec2 star_p = dir.xz / max(0.001, (dir.y + 1.2)); // cheap "projection"
@@ -99,6 +113,11 @@ void main() {
   float star = clamp((h - threshold) / (1.0 - threshold), 0.0, 1.0);
   star = pow(star, 10.0);
   sky_color += vec3(1.0) * star * star_mask;
+  */
+
+  vec3 stars = stars(dir, 0.995, 800.0, t);
+  sky_color += stars;
+
   frag_color = vec4(sky_color.rgb, 1.0);
 }
 
