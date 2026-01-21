@@ -1,5 +1,5 @@
-@header package main
-@header import sg "./sokol/gfx"
+@header package shaders
+@header import sg "../sokol/gfx"
 
 ///////////////////////////////////
 // Dithered Shader

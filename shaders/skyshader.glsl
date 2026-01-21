@@ -1,5 +1,5 @@
-@header package main
-@header import sg "./sokol/gfx"
+@header package shaders
+@header import sg "../sokol/gfx"
 
 //////////////////////////
 // Sky Shader
@@ -9,17 +9,17 @@
 // Vertex Shader
 //-----------------------
 @vs vs
-layout(binding=0) uniform sky_params {
+
+layout(binding=0) uniform sky_vs_params {
   mat4 view;
   mat4 proj;
   float time_of_day;
   float game_time;
+  vec2 _pad;
 };
 
 in vec3 pos;
 out vec3 dir;
-out float tod;
-out float game_t;
 
 vec3 rotate_axis(vec3 v, vec3 axis, float a) {
   axis = normalize(axis);
@@ -30,8 +30,6 @@ vec3 rotate_axis(vec3 v, vec3 axis, float a) {
 
 void main() {
   const float scale = 30.0;
-  tod = time_of_day;
-  game_t = game_time;
 
   vec3 p = pos * scale;
   dir = normalize(p);
@@ -54,31 +52,38 @@ void main() {
 //-----------------------
 @fs fs
 in vec3 dir;
-in float tod;
-in float game_t;
 out vec4 frag_color;
+
+layout(binding=1) uniform sky_fs_params {
+  vec4 horizon_now;
+  vec4 zenith_now;
+  float time_of_day;
+  float game_time;
+  vec2 _pad;
+};
 
 float saturate(float x) {
   return clamp(x, 0.0, 1.0);
 }
 
+/*
 vec3 get_horizon_color(float tod) {
   float blend = (tod - 0.5) / 0.25;
-  return mix(vec3(0.7, 0.5, 0.3), vec3(0.8, 0.4, 0.2), blend);
+  return mix(vec3(horizon_now), vec3(horizon_next), blend);
 }
 
 vec3 get_zenith_color(float tod) {
-    float blend = (tod - 0.5) / 0.25;
-  return mix(vec3(0.3, 0.5, 0.8), vec3(0.2, 0.3, 0.6), blend);
+  float blend = (tod - 0.5) / 0.25;
+  return mix(vec3(zenith_now), vec3(zenith_next), blend);
 }
-
+*/
 float hash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 34.345);
   return fract(p.x * p.y);
 }
 
-vec3 stars(vec3 dir, float threshold, float grid, float game_t) {
+vec3 stars(vec3 dir, float threshold, float grid, float t) {
   float star_mask = pow(saturate(dir.y), 4.0);
 
   // Project onto dome
@@ -89,22 +94,22 @@ vec3 stars(vec3 dir, float threshold, float grid, float game_t) {
   star = pow(star, 10.0);
 
   // Twinkle effect
-  float twinkle = 0.5 + 0.25 * sin((game_t * 5) * dir.x * dir.y);
+  float twinkle = 0.5 + 0.25 * sin((t * 5) * dir.x * dir.y);
 
   return vec3(star * star_mask * twinkle);
 }
 
 void main() {
-  vec3 horizon = get_horizon_color(tod);
-  vec3 zenith = get_zenith_color(tod);
+  //vec3 horizon = get_horizon_color(time_of_day);
+  //vec3 zenith = get_zenith_color(time_of_day);
 
   // Gradient from horizon to zenith
   float blend = dir.y * dir.y;
-  vec3 sky_color = mix(horizon, zenith, blend);
+  vec4 sky_color = mix(horizon_now, zenith_now, blend);
 
   // Add stars
-  sky_color += stars(dir, 0.995, 800.0, game_t);
-  frag_color = vec4(sky_color, 1.0);
+  sky_color += vec4(stars(dir, 0.995, 800.0, game_time), 1.0);
+  frag_color = sky_color;
 }
 @end
 

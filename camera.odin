@@ -69,8 +69,6 @@ update_camera_movement :: proc(cam: ^Camera, input: Actions, dt: f32) {
     right := glsl.normalize(glsl.cross(cam.front, cam.up))
     if .Left     in input do cam.position -= right * speed
     if .Right    in input do cam.position += right * speed
-
-
 }
 
 get_view_proj :: proc(cam: ^Camera) -> glsl.mat4 {

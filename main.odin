@@ -5,12 +5,15 @@ import "core:fmt"
 import img "vendor:stb/image"
 import slog "./sokol/log"
 import sg "./sokol/gfx"
+import sgl "./sokol/gl"
+
 import sapp "./sokol/app"
 import sglue "./sokol/glue"
 import sdtx "./sokol/debugtext"
 import "core:math/linalg/glsl"
 
 import m "./math"
+import "./shaders"
 
 FONT_KC853 :: 0
 FONT_KC854 :: 1
@@ -41,9 +44,11 @@ state: struct {
         count: i32,
     },
     sky: Sky_Renderer,
+    billboards: Billboard_Renderer,
     rx, ry, vx, vy: f32,
     camera: Camera,
     keys: Actions,
+    debug_ui: ^Debug_UI,
 }
 
 Vertex :: struct {
@@ -60,7 +65,7 @@ Grid_Vertex :: struct {
 
 init :: proc "c" () {
     context = runtime.default_context()
-
+    using shaders
     sg.setup({
         environment = sglue.environment(),
         logger = { func = slog.func },
@@ -78,9 +83,12 @@ init :: proc "c" () {
         logger = { func = slog.func },
     })
 
+    // sgl for ui
+    sgl.setup({})
+
     // init camera
     state.camera = init_camera(sapp.widthf() / sapp.heightf())
-    sapp.lock_mouse(true)
+    //sapp.lock_mouse(true)
 
     uv_max :: 1024 * 6
     vertices := [?]Vertex {
@@ -162,19 +170,21 @@ init :: proc "c" () {
     state.offscreen.bind.samplers[SMP_smp] = sg.make_sampler({})
 
     // Skybox
-
     state.sky = init_sky()
+
+    // Billboards
+    state.billboards = init_billboards()
 
     // Grid generation
     grid_verts, grid_count := create_grid()
     state.grid.count = grid_count
     state.grid.bind.vertex_buffers[0] = grid_verts
     state.grid.pip = sg.make_pipeline({
-        shader = sg.make_shader(grid_shader_desc(sg.query_backend())),
+        shader = sg.make_shader(shaders.grid_shader_desc(sg.query_backend())),
         layout = {
             attrs = {
-                ATTR_grid_pos    = { format = .FLOAT3 },
-                ATTR_grid_color0 = { format = .FLOAT4 },
+                shaders.ATTR_grid_pos    = { format = .FLOAT3 },
+                shaders.ATTR_grid_color0 = { format = .FLOAT4 },
             },
         },
         primitive_type = .LINES,
@@ -187,6 +197,9 @@ init :: proc "c" () {
     // Display Pipeline setup
     offscreen_img := init_offscreen_renderer()
     init_display_renderer(offscreen_img)
+
+    // UIs
+    state.debug_ui = init_debug_ui();
 }
 
 
@@ -195,8 +208,8 @@ init :: proc "c" () {
 //------------//
 frame :: proc "c" () {
     context = runtime.default_context()
+    using shaders
     t := f32(sapp.frame_duration())
-    state.sky.state.game_time += t;
 
     if .Action in state.keys {
         state.vx = 1
@@ -217,9 +230,10 @@ frame :: proc "c" () {
     sdtx.origin(0.0, 2.0)
     sdtx.color3f(1.0, 0.0, 1.0)
     sdtx.font(FONT_CPC)
-    sdtx.printf("hello world %.1f %.1f \n", state.camera.yaw, state.camera.pitch)
+    sdtx.printf("hello world %.1f %.1f \n", fps, t)
 
     view_proj := get_view_proj(&state.camera)
+
 
     // Pass 1: Render to texture
     sg.begin_pass({
@@ -229,7 +243,7 @@ frame :: proc "c" () {
     })
 
     // SKY (this doesnt write to the depth buffer, so we draw it first)
-    draw_sky(&state.sky, &state.camera)
+    draw_sky(&state.sky, &state.camera, t)
 
     // GRID
     sg.apply_pipeline(state.grid.pip)
@@ -248,9 +262,14 @@ frame :: proc "c" () {
     }
     sg.apply_uniforms(UB_vs_params, { ptr = &vs_params, size = size_of(vs_params) })
     sg.draw(0, 36, 1)
+
+    // Billboards
+    draw_billboards(&state.billboards, &state.camera)
+
     sg.end_pass()
 
-    // Pass 2: Displaying and scaling render texture
+
+    // pass 2: Displaying and scaling render texture
 
     sg.begin_pass({ action = state.display.pass, swapchain = sglue.swapchain() })
 
@@ -263,17 +282,25 @@ frame :: proc "c" () {
     display_fs_params := Display_Fs_Params {
         enable         = flag,
         resolution     = { sapp.widthf(), sapp.heightf(),  },
-        inv_resolution = { 1.0 /sapp.widthf(), 1.0/sapp.heightf(),  },
+        inv_resolution = { 1.0 /sapp.widthf(), 1.0/sapp.heightf(), },
     }
     sg.apply_uniforms(UB_display_fs_params, { ptr = &display_fs_params, size = size_of(display_fs_params) })
 
     sg.draw(0,3,1)
     sdtx.draw()
+
+    if state.debug_ui.active {
+        draw_debug_ui(state.debug_ui)
+    }
+
     sg.end_pass()
 
     sg.commit()
 }
 
+//------------//
+// Events
+//------------//
 event :: proc "c" (e: ^sapp.Event) {
     context = runtime.default_context()
 
@@ -286,12 +313,26 @@ event :: proc "c" (e: ^sapp.Event) {
             }
         }
 
-        if e.key_code == .ESCAPE {
-            sapp.request_quit()
+        if e.type == .KEY_UP {
+            if e.key_code == .ESCAPE {
+                sapp.request_quit()
+            }
+
+            if e.key_code == .TAB {
+                state.debug_ui.active = !state.debug_ui.active
+            }
         }
+
     }
 
-    handle_camera_input(&state.camera, e)
+    if state.debug_ui.active {
+        sapp.lock_mouse(false)
+        debug_ui_input(e, state.debug_ui)
+        return
+    } else {
+        sapp.lock_mouse(true)
+        handle_camera_input(&state.camera, e)
+    }
 }
 
 
@@ -307,6 +348,7 @@ compute_mvp :: proc (rx, ry: f32) -> [16]f32 {
 cleanup :: proc "c" () {
     context = runtime.default_context()
     sapp.lock_mouse(false)
+    sgl.shutdown()
     sdtx.shutdown()
     sg.shutdown()
 }
@@ -349,6 +391,7 @@ main :: proc() {
 
 
 init_offscreen_renderer :: proc() -> sg.Image {
+    using shaders
     // Offscreen Pipeline setup
     state.offscreen.pip = sg.make_pipeline({
         shader = sg.make_shader(texcube_shader_desc(sg.query_backend())),
@@ -405,6 +448,7 @@ init_offscreen_renderer :: proc() -> sg.Image {
 }
 
 init_display_renderer :: proc(color_img: sg.Image) {
+    using shaders
     state.display.pip = sg.make_pipeline({
         shader = sg.make_shader(display_shader_desc(sg.query_backend())),
         cull_mode = .NONE
