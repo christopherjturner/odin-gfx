@@ -19,13 +19,13 @@ Sky_Renderer :: struct {
 }
 
 Sky_State :: struct {
-    time_of_day: f32,
+    time_of_day: f32, // 0.0 - 1.0
     game_time:   f32,
     game_time_offset: f32,
     now:  Sky_Color,
-    next: Sky_Color,
 }
 
+// TODO: mix in sun color, maybe we can use the moon as well?
 Sky_Color :: struct {
     time:          f32, // 0.0 -> 1.0
     sun_intensity: f32,
@@ -42,11 +42,8 @@ init_sky :: proc() -> Sky_Renderer {
     using shaders
     sky: Sky_Renderer
 
+    // Generate dome
     sky.verts, sky.indices = generate_sky_dome(8, 16)
-
-    for p in sky_palette.keyframes {
-        fmt.printf("%v\n", p)
-    }
 
     // Create an bind buffers
     sky.bind.vertex_buffers[0] = sg.make_buffer({
@@ -60,7 +57,7 @@ init_sky :: proc() -> Sky_Renderer {
 
     // Set up the sky shader pipeline
     using shaders;
-    shd := sg.make_shader(sky_shader_desc(sg.query_backend()))
+    sky_shader := sg.make_shader(sky_shader_desc(sg.query_backend()))
     sky.pip = sg.make_pipeline({
         layout = {
             attrs = {
@@ -69,11 +66,11 @@ init_sky :: proc() -> Sky_Renderer {
         },
         index_type = .UINT16,
         depth = {
-            compare = .ALWAYS,      // TODO: revert this back to actually checking
+            compare       = .LESS_EQUAL,      // TODO: revert this back to actually checking
             write_enabled = false,
         },
-        cull_mode = .NONE, // TODO: cull front instead
-        shader = shd,
+        cull_mode = .BACK,
+        shader    = sky_shader,
     })
 
     return sky
@@ -82,30 +79,27 @@ init_sky :: proc() -> Sky_Renderer {
 draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
     using shaders
 
-    // TODO: work out how to divide game time into a day/night
+    // TODO: work out how much to divide game time into a day/night
     sky.state.game_time += t;
-    sky.state.time_of_day = glsl.mod((sky.state.game_time + sky.state.game_time_offset) * 0.2, 1.0);
+    //sky.state.time_of_day = glsl.mod(0.5 + (sky.state.game_time * 0.001), 1.0);
 
-    p1, p2, pt := find_keyframe_indices(&sky_palette, sky.state.game_time * 0.05)
+    p1, p2, pt := find_keyframe_indices(&sky_palette, sky.state.time_of_day)
     sky.state.now = interpolate_keyframes(sky_palette.keyframes[p1], sky_palette.keyframes[p2], pt)
 
     proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 10000.0)
     view := glsl.mat4LookAt(cam.position, cam.position + cam.front, cam.up)
 
     vs_uniforms := Sky_Vs_Params{
-        view        = transmute([16]f32)view,
-        proj        = transmute([16]f32)proj,
-        time_of_day = sky.state.time_of_day,
-        game_time   = sky.state.game_time,
+        view       = transmute([16]f32)view,
+        proj       = transmute([16]f32)proj,
+        game_time  = sky.state.game_time,
     }
 
     fs_uniforms := Sky_Fs_Params{
-        horizon_now  = sky.state.now.horizon_color,
-        zenith_now   = sky.state.now.zenith_color,
-        time_of_day  = sky.state.time_of_day,
-        game_time    = sky.state.game_time,
+        horizon_now = sky.state.now.horizon_color,
+        zenith_now  = sky.state.now.zenith_color,
+        game_time   = sky.state.game_time,
     }
-
 
     sg.apply_pipeline(sky.pip)
     sg.apply_bindings(sky.bind)
@@ -169,7 +163,7 @@ sky_palette := Sky_Palette {
             sun_intensity = 0.0,
             ambient_color = {0.05, 0.05, 0.15, 1.0},
             horizon_color = {0.05, 0.05, 0.15, 1.0},
-            zenith_color = {0.01, 0.01, 0.05, 1.0},
+            zenith_color  = {0.01, 0.01, 0.05, 1.0},
         },
 
         // Pre-dawn
@@ -178,7 +172,7 @@ sky_palette := Sky_Palette {
             sun_intensity = 0.0,
             ambient_color = {0.08, 0.08, 0.18, 1.0},
             horizon_color = {0.1, 0.1, 0.2, 1.0},
-            zenith_color = {0.01, 0.01, 0.05, 1.0},
+            zenith_color  = {0.01, 0.01, 0.05, 1.0},
         },
 
         // Dawn
@@ -187,7 +181,7 @@ sky_palette := Sky_Palette {
             sun_intensity = 0.3,
             ambient_color = {0.4, 0.35, 0.45, 1.0},
             horizon_color = {0.7, 0.5, 0.3, 1.0},
-            zenith_color = {0.3, 0.5, 0.8, 1.0},
+            zenith_color  = {0.3, 0.5, 0.8, 1.0},
         },
 
         // Mid-morning
@@ -196,7 +190,7 @@ sky_palette := Sky_Palette {
             ambient_color = {0.6, 0.6, 0.65, 1.0},
             sun_intensity = 0.8,
             horizon_color = {0.7, 0.7, 0.8, 1.0},
-            zenith_color = {0.3, 0.5, 0.9, 1.0},
+            zenith_color  = {0.3, 0.5, 0.9, 1.0},
         },
 
         // Noon
@@ -205,7 +199,7 @@ sky_palette := Sky_Palette {
             ambient_color = {0.65, 0.65, 0.7, 1.0},
             sun_intensity = 1.0,
             horizon_color = {0.7, 0.7, 0.85, 1.0},
-            zenith_color = {0.3, 0.5, 0.95, 1.0},
+            zenith_color  = {0.3, 0.5, 0.95, 1.0},
         },
 
         // Afternoon
@@ -214,7 +208,7 @@ sky_palette := Sky_Palette {
             ambient_color = {0.65, 0.65, 0.7, 1.0},
             sun_intensity = 0.9,
             horizon_color = {0.75, 0.65, 0.7, 1.0},
-            zenith_color = {0.3, 0.5, 0.9, 1.0},
+            zenith_color  = {0.3, 0.5, 0.9, 1.0},
         },
         // Dusk
         {
@@ -222,7 +216,7 @@ sky_palette := Sky_Palette {
             sun_intensity = 0.4,
             ambient_color = {0.45, 0.35, 0.4, 1.0},
             horizon_color = {0.8, 0.4, 0.2, 1.0},
-            zenith_color = {0.2, 0.3, 0.6, 1.0},
+            zenith_color  = {0.2, 0.3, 0.6, 1.0},
         },
         // Post-dusk
         {
@@ -230,7 +224,7 @@ sky_palette := Sky_Palette {
             sun_intensity = 0.0,
             ambient_color = {0.08, 0.08, 0.18, 1.0},
             horizon_color = {0.1, 0.05, 0.15, 1.0},
-            zenith_color = {0.01, 0.01, 0.05, 1.0},
+            zenith_color  = {0.01, 0.01, 0.05, 1.0},
         },
 
         // Back to midnight (for wrapping)
@@ -239,15 +233,12 @@ sky_palette := Sky_Palette {
             sun_intensity = 0.0,
             ambient_color = {0.05, 0.05, 0.15, 1.0},
             horizon_color = {0.05, 0.05, 0.15, 1.0},
-            zenith_color = {0.01, 0.01, 0.05, 1.0},
+            zenith_color  = {0.01, 0.01, 0.05, 1.0},
         },
     }
 }
 
-find_keyframe_indices :: proc(palette: ^Sky_Palette, time: f32) -> (idx0, idx1: int, t: f32) {
-    // Wrap time
-    wrapped_time := math.mod(time, 1.0)
-    // Find surrounding keyframes
+find_keyframe_indices :: proc(palette: ^Sky_Palette, wrapped_time: f32) -> (idx0, idx1: int, t: f32) {
     for i in 0..<len(palette.keyframes)-1 {
         if wrapped_time >= palette.keyframes[i].time &&
             wrapped_time <= palette.keyframes[i+1].time {

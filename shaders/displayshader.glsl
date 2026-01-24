@@ -53,7 +53,7 @@ void main() {
 
 
   frag_color = texture(sampler2D(dtex, dsmp), uv2);
-  //frag_color.rgb = quantizeBits(frag_color.rgb, vec3(7,7,7));
+  frag_color.rgb = quantizeBits(frag_color.rgb, vec3(7,7,7));
 
 }
 

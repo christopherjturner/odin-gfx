@@ -13,9 +13,8 @@
 layout(binding=0) uniform sky_vs_params {
   mat4 view;
   mat4 proj;
-  float time_of_day;
   float game_time;
-  vec2 _pad;
+  vec3 _pad;
 };
 
 in vec3 pos;
@@ -29,10 +28,10 @@ vec3 rotate_axis(vec3 v, vec3 axis, float a) {
 }
 
 void main() {
-  const float scale = 30.0;
+  const float scale = 100.0;
 
-  vec3 p = pos * scale;
-  dir = normalize(p);
+  vec3 scaled_pos = pos * scale;
+  dir = normalize(scaled_pos);
 
   // Apply Earth's axial tilt (23.4 degrees)
   const float tilt = radians(23.4);
@@ -41,9 +40,9 @@ void main() {
 
   // Lock view position to camera (skybox effect)
   mat4 v = view;
-  v[3] = vec4(0.0, -scale * 0.25, 0.0, 1.0);
+  v[3] = vec4(0.0, -scale * 0.5, 0.0, 1.0);
 
-  gl_Position = proj * v * vec4(p, 1.0);
+  gl_Position = proj * v * vec4(scaled_pos, 1.0);
 }
 @end
 
@@ -57,26 +56,14 @@ out vec4 frag_color;
 layout(binding=1) uniform sky_fs_params {
   vec4 horizon_now;
   vec4 zenith_now;
-  float time_of_day;
   float game_time;
-  vec2 _pad;
+  vec3 _pad;
 };
 
 float saturate(float x) {
   return clamp(x, 0.0, 1.0);
 }
 
-/*
-vec3 get_horizon_color(float tod) {
-  float blend = (tod - 0.5) / 0.25;
-  return mix(vec3(horizon_now), vec3(horizon_next), blend);
-}
-
-vec3 get_zenith_color(float tod) {
-  float blend = (tod - 0.5) / 0.25;
-  return mix(vec3(zenith_now), vec3(zenith_next), blend);
-}
-*/
 float hash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 34.345);
@@ -100,9 +87,6 @@ vec3 stars(vec3 dir, float threshold, float grid, float t) {
 }
 
 void main() {
-  //vec3 horizon = get_horizon_color(time_of_day);
-  //vec3 zenith = get_zenith_color(time_of_day);
-
   // Gradient from horizon to zenith
   float blend = dir.y * dir.y;
   vec4 sky_color = mix(horizon_now, zenith_now, blend);

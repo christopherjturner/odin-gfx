@@ -23,8 +23,8 @@ FONT_C64   :: 4
 FONT_ORIC  :: 5
 
 
-OFFSCREEN_WIDTH  :: 800
-OFFSCREEN_HEIGHT :: 600
+OFFSCREEN_WIDTH  :: 640
+OFFSCREEN_HEIGHT :: 480
 
 
 state: struct {
@@ -45,6 +45,7 @@ state: struct {
     },
     sky: Sky_Renderer,
     billboards: Billboard_Renderer,
+    terrain: Terrain_Renderer,
     rx, ry, vx, vy: f32,
     camera: Camera,
     keys: Actions,
@@ -148,7 +149,6 @@ init :: proc "c" () {
         sapp.quit()
     }
     defer img.image_free(pixels)
-    //fmt.printf("texture: %d %d %d", t_width, t_height, t_chan)
 
     img_desc := sg.Image_Desc {
         width = t_width,
@@ -175,24 +175,11 @@ init :: proc "c" () {
     // Billboards
     state.billboards = init_billboards()
 
+    // Terrain
+    state.terrain = init_terrain()
+
     // Grid generation
-    grid_verts, grid_count := create_grid()
-    state.grid.count = grid_count
-    state.grid.bind.vertex_buffers[0] = grid_verts
-    state.grid.pip = sg.make_pipeline({
-        shader = sg.make_shader(shaders.grid_shader_desc(sg.query_backend())),
-        layout = {
-            attrs = {
-                shaders.ATTR_grid_pos    = { format = .FLOAT3 },
-                shaders.ATTR_grid_color0 = { format = .FLOAT4 },
-            },
-        },
-        primitive_type = .LINES,
-        depth = {
-            compare = .LESS_EQUAL,
-            write_enabled = true,
-        },
-    })
+    init_grid()
 
     // Display Pipeline setup
     offscreen_img := init_offscreen_renderer()
@@ -245,14 +232,11 @@ frame :: proc "c" () {
     // SKY (this doesnt write to the depth buffer, so we draw it first)
     draw_sky(&state.sky, &state.camera, t)
 
-    // GRID
-    sg.apply_pipeline(state.grid.pip)
-    sg.apply_bindings(state.grid.bind)
-    grid_vs: Vs_Params
+    // Terrain
+    draw_terrain(&state.terrain, &state.camera)
 
-    grid_vs.mvp = transmute([16]f32)view_proj // Grid doesn't move/rotate
-    sg.apply_uniforms(UB_grid_vs_params, { ptr = &grid_vs, size = size_of(grid_vs) })
-    sg.draw(0, state.grid.count, 1)
+    // GRID
+    //draw_grid(&state.camera)
 
     // CUBE
     sg.apply_pipeline(state.offscreen.pip)
@@ -352,26 +336,6 @@ cleanup :: proc "c" () {
     sdtx.shutdown()
     sg.shutdown()
 }
-
-
-create_grid :: proc() -> (sg.Buffer, i32) {
-    verts := [dynamic]Grid_Vertex{}
-    size  := f32(10.0)
-    step  := f32(1.0)
-    for i := -size; i <= size; i += step {
-        // Lines along X
-        append(&verts, Grid_Vertex{{-size, 0, i}, 0xFF666666})
-        append(&verts, Grid_Vertex{{ size, 0, i}, 0xFF666666})
-        // Lines along Z
-        append(&verts, Grid_Vertex{{i, 0, -size}, 0xFF666666})
-        append(&verts, Grid_Vertex{{i, 0,  size}, 0xFF666666})
-    }
-    buf := sg.make_buffer({
-        data = { ptr = &verts[0], size = len(verts) * size_of(Grid_Vertex) },
-    })
-    return buf, i32(len(verts))
-}
-
 
 main :: proc() {
     sapp.run({

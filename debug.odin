@@ -1,11 +1,11 @@
 package main
 
-import sapp "./sokol/app"
-import sg "./sokol/gfx"
-import sgl "./sokol/gl"
 import "core:fmt"
 import "base:runtime"
 import mu "vendor:microui"
+import sapp "./sokol/app"
+import sg "./sokol/gfx"
+import sgl "./sokol/gl"
 
 Debug_UI :: struct {
     pip:             sgl.Pipeline,
@@ -109,7 +109,6 @@ draw_debug_ui :: proc(debug_ui: ^Debug_UI) {
 }
 
 debug_ui_input :: proc "c" (ev: ^sapp.Event, debug_ui: ^Debug_UI) {
-
     context = runtime.default_context()
 
     mu_ctx := &debug_ui.mu_ctx
@@ -139,26 +138,22 @@ layout_debug_ui :: proc(ctx: ^mu.Context) {
     if mu.window(ctx, "Style Window", {350, 250, 300, 240}) {
         sw := i32(f32(mu.get_current_container(ctx).body.w) * 0.25)
         mu.layout_row(ctx, {100, 100, -1})
-
-        
-
-        // cube rotation
-        //mu.label(ctx, "rotx")
-        //f32_slider(ctx, &state.rx, 0.0, 255.0)
-
-        //mu.label(ctx, "roty")
-        //f32_slider(ctx, &state.ry, 0.0, 255.0)
         mu.label(ctx, fmt.tprintf("game time %.1f", state.sky.state.game_time))
         mu.label(ctx, fmt.tprintf("time_of_day %.1f", state.sky.state.time_of_day))
 
         mu.layout_row(ctx, {100, -1})
-        mu.label(ctx, "time offset")
-        f32_slider(ctx, &state.sky.state.game_time_offset, 0.0, 1.0)
+        mu.label(ctx, "time of day")
+        f32_slider(ctx, &state.sky.state.time_of_day, 0.0, 1.0)
 
-        mu.layout_row(ctx, {sw, sw, sw, -1})
-        mu.label(ctx, fmt.tprintf("r time %.2f", state.sky.state.now.horizon_color.r))
-        mu.label(ctx, fmt.tprintf("g time %.2f", state.sky.state.now.horizon_color.g))
-        mu.label(ctx, fmt.tprintf("b time %.2f", state.sky.state.now.horizon_color.b))
+
+        for i := 0; i < len(sky_palette.keyframes); i += 1 {
+            mu.layout_row(ctx, {sw, sw, sw, sw, -1})
+            mu.label(ctx, fmt.tprintf("%.2f", sky_palette.keyframes[i].time))
+            f32_slider(ctx, &sky_palette.keyframes[i].horizon_color.r, 0.0, 1.0)
+            f32_slider(ctx, &sky_palette.keyframes[i].horizon_color.b, 0.0, 1.0)
+            f32_slider(ctx, &sky_palette.keyframes[i].horizon_color.g, 0.0, 1.0)
+        }
+
 
     }
 }

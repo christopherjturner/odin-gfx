@@ -111,6 +111,7 @@ draw_billboards :: proc(bb: ^Billboard_Renderer, cam: ^Camera) {
     vp := get_view_proj(cam)
     uniforms := Billboard_Params{
         view_proj = transmute([16]f32)vp,
+        ambient_color = state.sky.state.now.ambient_color,
     }
 
 
