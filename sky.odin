@@ -21,6 +21,7 @@ Sky_Renderer :: struct {
 Sky_State :: struct {
     time_of_day: f32, // 0.0 - 1.0
     game_time:   f32,
+    sun_dir:     [3]f32,
     game_time_offset: f32,
     now:  Sky_Color,
 }
@@ -84,10 +85,11 @@ draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
 
     // TODO: work out how much to divide game time into a day/night
     sky.state.game_time += t;
-    //sky.state.time_of_day = glsl.mod(0.5 + (sky.state.game_time * 0.001), 1.0);
+    //sky.state.time_of_day = glsl.mod(0.5 + (sky.state.game_time * 0.01), 1.0);
 
     p1, p2, pt := find_keyframe_indices(&sky_palette, sky.state.time_of_day)
     sky.state.now = interpolate_keyframes(sky_palette.keyframes[p1], sky_palette.keyframes[p2], pt)
+    sky.state.sun_dir = update_sun_direction(sky.state.time_of_day)
 
     proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 10000.0)
     view := glsl.mat4LookAt(cam.position, cam.position + cam.front, cam.up)
@@ -274,10 +276,34 @@ interpolate_keyframes :: proc(k0, k1: Sky_Color, t: f32) -> Sky_Color {
 
     result.time          = k0.time + (k1.time - k0.time) * t
     result.sun_intensity = k0.sun_intensity + (k1.sun_intensity - k0.sun_intensity) * t
-    result.sun_color     = math.lerp(k0.sun_color, k1.sun_color, t)
+    result.sun_color     = math.lerp(k0.sun_color, k1.sun_color, t) * result.sun_intensity
     result.ambient_color = math.lerp(k0.ambient_color, k1.ambient_color, t)
     result.horizon_color = math.lerp(k0.horizon_color, k1.horizon_color, t)
     result.zenith_color  = math.lerp(k0.zenith_color, k1.zenith_color, t)
 
+    /*
+    // Moonlight contribution
+    if state.time_of_day < 0.25 || state.time_of_day > 0.75 {
+        moon_factor := state.time_of_day < 0.25 ? 
+            (0.25 - state.time_of_day) / 0.25 : 
+            (state.time_of_day - 0.75) / 0.25
+        moon_contrib := [3]f32{0.15, 0.15, 0.2} * moon_factor * 0.3
+        lighting.ambient_color += moon_contrib
+    }
+    */
+
     return result
+}
+
+update_sun_direction :: proc(time_of_day: f32) -> [3]f32 {
+    // time_of_day is 0.0 to 1.0
+    // We want 0.5 to be "Noon" (Sun at peak)
+    // We subtract 0.25 so that 0.0 starts at "Midnight" or "Sunrise"
+    angle := (time_of_day - 0.25) * 2.0 * math.PI
+    sun_dir: [3]f32
+    sun_dir.x = math.cos(angle)
+    sun_dir.y = math.sin(angle)
+    sun_dir.z = 0.2 // Slight tilt for better looking shadows
+
+    return glsl.normalize(sun_dir)
 }

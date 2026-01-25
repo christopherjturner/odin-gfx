@@ -150,11 +150,13 @@ draw_terrain :: proc(terrain: ^Terrain_Renderer, cam: ^Camera) {
 
     vs_uniforms := shaders.Terrain_Vs_Params {
         view_proj     = transmute([16]f32)view_proj,
+        u_camera_pos  = cam.position,
         ambient_color = state.sky.state.now.ambient_color,
         sun_color     = state.sky.state.now.sun_color, // * state.sky.state.now.sun_intensity,
         chunk_pos     = terrain.pos,
         scale         = terrain.scale,
         u_grid_width  = terrain.width,
+        u_sun_dir     = state.sky.state.sun_dir,
     }
 
     sg.apply_pipeline(terrain.pip)

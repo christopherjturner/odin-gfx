@@ -408,8 +408,7 @@ init_offscreen_renderer :: proc() -> sg.Image {
     })
     state.offscreen.pass.action = {
         colors = {
-            //0 = { load_action = .CLEAR, clear_value = { 0.1, 0.1, 0.75, 1.0 } },
-            0 = { load_action = .CLEAR, clear_value = { 1.0, 0.1, 0.75, 1.0 } },
+            0 = { load_action = .CLEAR, clear_value = { 0.1, 0.1, 0.75, 1.0 } },
         },
         depth = { load_action = .CLEAR, clear_value = 1.0 },
     }
@@ -437,7 +436,7 @@ init_display_renderer :: proc(color_img: sg.Image) {
 
     state.display.pass = {
         colors = {
-            0 = { load_action = .CLEAR, clear_value = { 0.0, 1.0, 1.0, 1.0 } },
+            0 = { load_action = .CLEAR, clear_value = { 0.0, 0.0, 0.0, 1.0 } },
         },
         depth = { load_action = .CLEAR, clear_value = 1.0 },
     }
