@@ -56,8 +56,10 @@ out vec4 frag_color;
 layout(binding=1) uniform sky_fs_params {
   vec4 horizon_now;
   vec4 zenith_now;
+  vec4 sun_color;
+  vec3 sun_dir;
+  vec3 view_dir;
   float game_time;
-  vec3 _pad;
 };
 
 float saturate(float x) {
@@ -86,6 +88,24 @@ vec3 stars(vec3 dir, float threshold, float grid, float t) {
   return vec3(star * star_mask * twinkle);
 }
 
+vec4 drawSun(vec4 sky_color) {
+
+  float sun_height = max(sun_dir.y, 0.0);
+  float expansion = 1.0 + (1.0 - sun_height) * (30 * sun_height); // Simple linear boost
+  float base_radius = 0.9999;
+  float dynamic_radius = 1.0 - ((1.0 - base_radius) * expansion);
+
+  float sun_dot = dot(normalize(dir), sun_dir);
+  float sun_mask = smoothstep(dynamic_radius, dynamic_radius + 0.0002, sun_dot);
+  return mix(sky_color, sun_color * 1.2, sun_mask);
+}
+
+vec4 moon(vec4 sky_color) {
+  float moon_dot = dot(normalize(dir), -sun_dir);
+  float moon_mask = smoothstep(0.999, 0.9991, moon_dot);
+  return mix(sky_color, vec4(0.75, 0.7, 0.711, 1.0), moon_mask);
+}
+
 void main() {
   // Gradient from horizon to zenith
   float blend = dir.y * dir.y;
@@ -93,6 +113,10 @@ void main() {
 
   // Add stars
   sky_color += vec4(stars(dir, 0.995, 800.0, game_time), 1.0);
+
+  // Add sun
+  sky_color = moon(drawSun(sky_color));
+
   frag_color = sky_color;
 }
 @end

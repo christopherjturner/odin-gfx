@@ -103,6 +103,9 @@ draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
     fs_uniforms := Sky_Fs_Params{
         horizon_now = sky.state.now.horizon_color,
         zenith_now  = sky.state.now.zenith_color,
+        sun_color   = sky.state.now.sun_color,
+        sun_dir     = sky.state.sun_dir,
+        view_dir    = glsl.normalize(cam.front),
         game_time   = sky.state.game_time,
     }
 
