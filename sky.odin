@@ -29,6 +29,7 @@ Sky_State :: struct {
 Sky_Color :: struct {
     time:          f32, // 0.0 -> 1.0
     sun_intensity: f32,
+    sun_color:     [4]f32,
     ambient_color: [4]f32,
     horizon_color: [4]f32,
     zenith_color:  [4]f32,
@@ -41,6 +42,8 @@ Sky_Palette :: struct {
 init_sky :: proc() -> Sky_Renderer {
     using shaders
     sky: Sky_Renderer
+
+    sky.state.time_of_day = 0.5
 
     // Generate dome
     sky.verts, sky.indices = generate_sky_dome(8, 16)
@@ -161,6 +164,7 @@ sky_palette := Sky_Palette {
         {
             time = 0.0,
             sun_intensity = 0.0,
+            sun_color     = {0.0,  0.0,  0.0,  1.0},
             ambient_color = {0.05, 0.05, 0.15, 1.0},
             horizon_color = {0.05, 0.05, 0.15, 1.0},
             zenith_color  = {0.01, 0.01, 0.05, 1.0},
@@ -170,8 +174,9 @@ sky_palette := Sky_Palette {
         {
             time = 0.15,
             sun_intensity = 0.0,
+            sun_color     = {0.0,  0.0,  0.0,  1.0},
             ambient_color = {0.08, 0.08, 0.18, 1.0},
-            horizon_color = {0.1, 0.1, 0.2, 1.0},
+            horizon_color = {0.1,  0.1,  0.2,  1.0},
             zenith_color  = {0.01, 0.01, 0.05, 1.0},
         },
 
@@ -179,51 +184,57 @@ sky_palette := Sky_Palette {
         {
             time = 0.25,
             sun_intensity = 0.3,
+            sun_color     = {1.0, 0.6,  0.3,  1.0},
             ambient_color = {0.4, 0.35, 0.45, 1.0},
-            horizon_color = {0.7, 0.5, 0.3, 1.0},
-            zenith_color  = {0.3, 0.5, 0.8, 1.0},
+            horizon_color = {0.7, 0.5,  0.3,  1.0},
+            zenith_color  = {0.3, 0.5,  0.8,  1.0},
         },
 
         // Mid-morning
         {
             time = 0.35,
-            ambient_color = {0.6, 0.6, 0.65, 1.0},
             sun_intensity = 0.8,
-            horizon_color = {0.7, 0.7, 0.8, 1.0},
-            zenith_color  = {0.3, 0.5, 0.9, 1.0},
+            sun_color     = {1.0, 0.95, 0.85, 1.0},
+            ambient_color = {0.6, 0.6,  0.65, 1.0},
+            horizon_color = {0.7, 0.7,  0.8,  1.0},
+            zenith_color  = {0.3, 0.5,  0.9,  1.0},
         },
 
         // Noon
         {
             time = 0.5,
-            ambient_color = {0.65, 0.65, 0.7, 1.0},
             sun_intensity = 1.0,
-            horizon_color = {0.7, 0.7, 0.85, 1.0},
-            zenith_color  = {0.3, 0.5, 0.95, 1.0},
+            sun_color     = {1.0,  0.98, 0.95, 1.0},
+            ambient_color = {0.65, 0.65, 0.7,  1.0},
+            horizon_color = {0.7,  0.7,  0.85, 1.0},
+            zenith_color  = {0.3,  0.5,  0.95, 1.0},
         },
 
         // Afternoon
         {
             time = 0.65,
-            ambient_color = {0.65, 0.65, 0.7, 1.0},
             sun_intensity = 0.9,
+            sun_color     = {1.0,  0.95, 0.9, 1.0},
+            ambient_color = {0.65, 0.65, 0.7, 1.0},
             horizon_color = {0.75, 0.65, 0.7, 1.0},
-            zenith_color  = {0.3, 0.5, 0.9, 1.0},
+            zenith_color  = {0.3,  0.5, 0.9,  1.0},
         },
         // Dusk
         {
             time = 0.75,
             sun_intensity = 0.4,
+            sun_color     = {1.0,  0.5,  0.2, 1.0},
             ambient_color = {0.45, 0.35, 0.4, 1.0},
-            horizon_color = {0.8, 0.4, 0.2, 1.0},
-            zenith_color  = {0.2, 0.3, 0.6, 1.0},
+            horizon_color = {0.8,  0.4,  0.2, 1.0},
+            zenith_color  = {0.2,  0.3,  0.6, 1.0},
         },
         // Post-dusk
         {
             time = 0.85,
-            sun_intensity = 0.0,
+            sun_intensity = 0.1,
+            sun_color     = {0.6,  0.2,  0.1,  1.0},
             ambient_color = {0.08, 0.08, 0.18, 1.0},
-            horizon_color = {0.1, 0.05, 0.15, 1.0},
+            horizon_color = {0.1,  0.05, 0.15, 1.0},
             zenith_color  = {0.01, 0.01, 0.05, 1.0},
         },
 
@@ -231,6 +242,7 @@ sky_palette := Sky_Palette {
         {
             time = 1.0,
             sun_intensity = 0.0,
+            sun_color     = {0.0,  0.0,  0.0,  0.0},
             ambient_color = {0.05, 0.05, 0.15, 1.0},
             horizon_color = {0.05, 0.05, 0.15, 1.0},
             zenith_color  = {0.01, 0.01, 0.05, 1.0},
@@ -261,8 +273,9 @@ interpolate_keyframes :: proc(k0, k1: Sky_Color, t: f32) -> Sky_Color {
     result := Sky_Color{}
 
     result.time          = k0.time + (k1.time - k0.time) * t
-    result.ambient_color = math.lerp(k0.ambient_color, k1.ambient_color, t)
     result.sun_intensity = k0.sun_intensity + (k1.sun_intensity - k0.sun_intensity) * t
+    result.sun_color     = math.lerp(k0.sun_color, k1.sun_color, t)
+    result.ambient_color = math.lerp(k0.ambient_color, k1.ambient_color, t)
     result.horizon_color = math.lerp(k0.horizon_color, k1.horizon_color, t)
     result.zenith_color  = math.lerp(k0.zenith_color, k1.zenith_color, t)
 

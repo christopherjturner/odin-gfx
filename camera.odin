@@ -29,7 +29,7 @@ init_camera :: proc(aspect: f32) -> Camera {
         pitch    = 0.0,
         fov      = 45.0,
         aspect   = aspect,
-        speed    = 5.0,
+        speed    = 40.0,
         sens     = 0.1,
     }
     update_camera(&cam)
@@ -61,6 +61,7 @@ handle_camera_input :: proc(cam: ^Camera, ev: ^sapp.Event) {
 
 }
 
+// Basically just a freecam atm
 update_camera_movement :: proc(cam: ^Camera, input: Actions, dt: f32) {
     speed := cam.speed * dt
     if .Forward in input do cam.position += cam.front * speed
@@ -72,7 +73,7 @@ update_camera_movement :: proc(cam: ^Camera, input: Actions, dt: f32) {
 }
 
 get_view_proj :: proc(cam: ^Camera) -> glsl.mat4 {
-    proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 10000.0)
+    proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 1000.0)
     view := glsl.mat4LookAt(cam.position, cam.position + cam.front, cam.up)
     return proj * view
 }

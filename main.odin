@@ -211,6 +211,11 @@ frame :: proc "c" () {
     update_camera(&state.camera)
     update_camera_movement(&state.camera, state.keys, t)
 
+    // TEMP: stick camera to the terrain
+    height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z) + 1.0
+    state.camera.position.y = height
+
+    // Get the current FPS
     fps := 1 / sapp.frame_duration()
 
     sdtx.canvas(sapp.widthf() * 0.5, sapp.heightf() * 0.5)
@@ -403,7 +408,8 @@ init_offscreen_renderer :: proc() -> sg.Image {
     })
     state.offscreen.pass.action = {
         colors = {
-            0 = { load_action = .CLEAR, clear_value = { 0.1, 0.1, 0.75, 1.0 } },
+            //0 = { load_action = .CLEAR, clear_value = { 0.1, 0.1, 0.75, 1.0 } },
+            0 = { load_action = .CLEAR, clear_value = { 1.0, 0.1, 0.75, 1.0 } },
         },
         depth = { load_action = .CLEAR, clear_value = 1.0 },
     }
@@ -431,7 +437,7 @@ init_display_renderer :: proc(color_img: sg.Image) {
 
     state.display.pass = {
         colors = {
-            0 = { load_action = .CLEAR, clear_value = { 0.0, 0.0, 0.0, 1.0 } },
+            0 = { load_action = .CLEAR, clear_value = { 0.0, 1.0, 1.0, 1.0 } },
         },
         depth = { load_action = .CLEAR, clear_value = 1.0 },
     }

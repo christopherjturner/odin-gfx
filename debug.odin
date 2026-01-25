@@ -137,6 +137,13 @@ debug_ui_input :: proc "c" (ev: ^sapp.Event, debug_ui: ^Debug_UI) {
 layout_debug_ui :: proc(ctx: ^mu.Context) {
     if mu.window(ctx, "Style Window", {350, 250, 300, 240}) {
         sw := i32(f32(mu.get_current_container(ctx).body.w) * 0.25)
+
+        // heightmap checks
+        mu.layout_row(ctx, {100, 100, -1})
+        height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z)
+        mu.label(ctx, fmt.tprintf("height %.3f", height))
+
+
         mu.layout_row(ctx, {100, 100, -1})
         mu.label(ctx, fmt.tprintf("game time %.1f", state.sky.state.game_time))
         mu.label(ctx, fmt.tprintf("time_of_day %.1f", state.sky.state.time_of_day))
