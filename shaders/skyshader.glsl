@@ -102,9 +102,40 @@ vec4 drawSun(vec4 sky_color) {
 
 vec4 moon(vec4 sky_color) {
   float moon_dot = dot(normalize(dir), -sun_dir);
-  float moon_mask = smoothstep(0.999, 0.9991, moon_dot);
-  return mix(sky_color, vec4(0.75, 0.7, 0.711, 1.0), moon_mask);
+  float dist_to_moon = acos(moon_dot);
+  float moon_mask = smoothstep(0.02, 0.018, dist_to_moon);
+  vec3 moon_color = vec3(0.75, 0.72, 0.711);
+  moon_color = mix(sky_color.rgb, moon_color, moon_mask);
+  return vec4(moon_color, 1.0);
 }
+
+const vec3 total_rayleigh = vec3(5.8e-6, 13.5e-6, 33.1e-6);
+
+vec4 sun(vec4 sky_color) {
+  float cos_theta = dot(view_dir, sun_dir);
+  float zenith_angle = max(0.0, view_dir.y);
+
+  // 1. Rayleigh Phase Function
+  // This creates the general sky gradient
+  float rayleigh_phase = 0.75 * (1.0 + cos_theta * cos_theta);
+  vec3 rayleigh_color = total_rayleigh * rayleigh_phase;
+
+  // 2. Mie Phase Function (The Sun Glow)
+  // g = 0.76 to 0.99 (controls how "tight" the halo is)
+  float g = 0.8;
+  float mie_phase = (1.5 * (1.0 - g*g) * (1.0 + cos_theta*cos_theta)) /
+                      ((2.0 + g*g) * pow(1.0 + g*g - 2.0*g*cos_theta, 1.5));
+
+  // 3. Extinction (How much light is lost through the atmosphere)
+  // As the sun gets lower, light travels through more "air"
+  float sun_height = sun_dir.y;
+  vec3 extinction = exp(-total_rayleigh * (1.0 / (zenith_angle + 0.1)));
+
+  // Final Composition
+  vec3 final_sky = (rayleigh_color + mie_phase) * extinction;
+  return vec4(final_sky, 1.0);
+}
+
 
 void main() {
   // Gradient from horizon to zenith

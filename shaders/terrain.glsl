@@ -25,8 +25,8 @@ out vec4 v_col;
 out vec3 v_world_pos;
 out vec3 v_normal;
 
-const float u_fog_start = 50;
-const float u_fog_end = 200;
+const float u_fog_start = 150;
+const float u_fog_end = 400;
 const vec4 u_fog_color = vec4(0.0,0.0,0.0, 1.0);
 
 void main() {

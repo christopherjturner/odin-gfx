@@ -172,11 +172,15 @@ init :: proc "c" () {
     // Skybox
     state.sky = init_sky()
 
-    // Billboards
-    state.billboards = init_billboards()
-
     // Terrain
     state.terrain = init_terrain()
+
+    // Billboards
+    state.billboards = init_billboards()
+    // @hack
+    state.billboards.instances[0].pos.y = get_terrain_height(&state.terrain, state.billboards.instances[0].pos.x,state.billboards.instances[0].pos.z) + 1.0
+    state.billboards.instances[1].pos.y = get_terrain_height(&state.terrain, state.billboards.instances[1].pos.x,state.billboards.instances[1].pos.z) + 1.0
+
 
     // Grid generation
     init_grid()

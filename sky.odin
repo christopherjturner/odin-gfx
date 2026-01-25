@@ -85,7 +85,7 @@ draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
 
     // TODO: work out how much to divide game time into a day/night
     sky.state.game_time += t;
-    //sky.state.time_of_day = glsl.mod(0.5 + (sky.state.game_time * 0.01), 1.0);
+    sky.state.time_of_day = glsl.mod(0.5 + (sky.state.game_time * 0.01), 1.0);
 
     p1, p2, pt := find_keyframe_indices(&sky_palette, sky.state.time_of_day)
     sky.state.now = interpolate_keyframes(sky_palette.keyframes[p1], sky_palette.keyframes[p2], pt)
