@@ -28,7 +28,7 @@ vec3 rotate_axis(vec3 v, vec3 axis, float a) {
 }
 
 void main() {
-  const float scale = 100.0;
+  const float scale = 50.0;
 
   vec3 scaled_pos = pos * scale;
   dir = normalize(scaled_pos);

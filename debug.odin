@@ -160,8 +160,6 @@ layout_debug_ui :: proc(ctx: ^mu.Context) {
             f32_slider(ctx, &sky_palette.keyframes[i].horizon_color.b, 0.0, 1.0)
             f32_slider(ctx, &sky_palette.keyframes[i].horizon_color.g, 0.0, 1.0)
         }
-
-
     }
 }
 

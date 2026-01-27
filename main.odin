@@ -257,7 +257,7 @@ frame :: proc "c" () {
     sg.draw(0, 36, 1)
 
     // Billboards
-    draw_billboards(&state.billboards, &state.camera)
+    //draw_billboards(&state.billboards, &state.camera)
 
     sg.end_pass()
 
@@ -330,7 +330,11 @@ event :: proc "c" (e: ^sapp.Event) {
 
 
 compute_mvp :: proc (rx, ry: f32) -> [16]f32 {
-    model := glsl.mat4Rotate({1, 0, 0}, rx)
+
+    h := get_terrain_height(&state.terrain, 0, 0) + 0.5
+    model := glsl.mat4Translate({0, h, 0})
+
+    model  = model * glsl.mat4Rotate({1, 0, 0}, rx)
     model  = model * glsl.mat4Rotate({0, 1, 0}, ry)
     view_proj := get_view_proj(&state.camera)
     mvp := view_proj * model

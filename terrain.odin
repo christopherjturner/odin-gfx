@@ -31,6 +31,34 @@ Terrain_Renderer :: struct {
 init_terrain :: proc() -> Terrain_Renderer {
     terrain: Terrain_Renderer
 
+
+    // Load the texture map
+    t_img_w, t_img_h, t_img_chan: i32
+    t_img := img.load("./assets/grass.png", &t_img_w, &t_img_h, &t_img_chan, 4)
+    if t_img == nil {
+        panic("grass texture failed to load")
+    }
+    defer img.image_free(t_img)
+
+    t_img_desc := sg.Image_Desc {
+        width = t_img_w,
+        height = t_img_h,
+        pixel_format = .RGBA8,
+    }
+
+    t_img_desc.data.mip_levels[0] = {
+        ptr  = t_img,
+        size = uint(t_img_w * t_img_h * 4),
+    }
+
+    terrain.bind.views[shaders.VIEW_trtex] = sg.make_view({
+        texture = {
+            image = sg.make_image(t_img_desc)
+        }
+    })
+
+    terrain.bind.samplers[shaders.SMP_trsmp] = sg.make_sampler({})
+
     // load the hightmap from file
     img_w, img_h, t_chan: i32
     pixels := img.load("./assets/map.png", &img_w, &img_h, &t_chan, 4)
@@ -49,7 +77,7 @@ init_terrain :: proc() -> Terrain_Renderer {
 
     // Scale and reposition terrain chunk
     terrain.scale  = { 10.0, 100.0, 10.0 }
-    terrain.pos    = { f32(-img_w / 2) * terrain.scale.x, 0.0, f32(-img_h / 2) * terrain.scale.z }
+    terrain.pos    = { f32(-img_w / 2) * terrain.scale.x, -20.0, f32(-img_h / 2) * terrain.scale.z }
 
     // Generate chunk from image
     terrain.verts   = make([]Terrain_Vertex, img_w * img_h)
@@ -162,6 +190,7 @@ draw_terrain :: proc(terrain: ^Terrain_Renderer, cam: ^Camera) {
     sg.apply_pipeline(terrain.pip)
     sg.apply_bindings(terrain.bind)
     sg.apply_uniforms(shaders.UB_terrain_vs_params, { ptr = &vs_uniforms, size = size_of(vs_uniforms) })
+
     sg.draw(0, i32(len(terrain.indices)), 1)
 }
 
@@ -206,5 +235,5 @@ get_terrain_height :: proc(terrain: ^Terrain_Renderer, world_x, world_z: f32) ->
         result = (h11 + (1.0 - tx) * (h01 - h11) + (1.0 - tz) * (h10 - h11))
     }
 
-    return result * terrain.scale.y
+    return (result * terrain.scale.y) + terrain.pos.y
 }

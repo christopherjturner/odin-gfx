@@ -24,10 +24,12 @@ in vec3 color;
 out vec4 v_col;
 out vec3 v_world_pos;
 out vec3 v_normal;
+out vec2 v_uv;
 
-const float u_fog_start = 150;
-const float u_fog_end = 400;
+const float u_fog_start = 50;
+const float u_fog_end = 200;
 const vec4 u_fog_color = vec4(0.0,0.0,0.0, 1.0);
+const float texture_tiling = 2.0;
 
 void main() {
 
@@ -49,11 +51,13 @@ void main() {
   float fog_factor = clamp((u_fog_end - dist) / (u_fog_end - u_fog_start), 0.0, 1.0);
 
   // Blend the terrain color with the fog color
+  // TODO: switch to u_fog_color
   v_col = mix(sun_color, v_col, fog_factor);
 
+  // 4. Set outputs
+  v_uv = vec2(local_pos.x, local_pos.z) * texture_tiling;
   v_world_pos = world_pos;
   v_normal = world_normal;
-
   gl_Position = view_proj * vec4(world_pos, 1.0);
 }
 @end
@@ -63,15 +67,19 @@ void main() {
 //---------------------
 @fs terrain_fs
 
+layout(binding=0) uniform texture2D trtex;
+layout(binding=0) uniform sampler trsmp;
+
 in vec4 v_col;
 in vec3 v_world_pos;
 in vec3 v_normal;
+in vec2 v_uv;
 
 out vec4 frag_color;
 
 void main() {
-  // TODO: use textures etc
-  frag_color = v_col;
+  vec4 tex_color = texture(sampler2D(trtex, trsmp), v_uv);
+  frag_color = tex_color * v_col;
 }
 
 @end

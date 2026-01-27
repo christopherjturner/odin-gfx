@@ -61,7 +61,7 @@ void main() {
   }
 
 
-  /* // dithering, looks kinda janky
+  // dithering, looks kinda janky
   int x = int(mod(gl_FragCoord.x, 4.0));
   int y = int(mod(gl_FragCoord.y, 4.0));
 
@@ -71,11 +71,12 @@ void main() {
   float brightness = (tcol.r + tcol.g + tcol.b) / 3.0;
   float dithered   = brightness > threshold ? 1.0 : 0.5;
 
-  frag_color = tcol * dithered;
-  */
+  vec4 final_color = tcol;
+  //final_color = vec4(quantizeBits(final_color.rgb, vec3(5,6,5)), 1.0);
+  //final_color = final_color * dithered;
 
-  frag_color = texture(sampler2D(dtex, dsmp), uv2);
-  //frag_color.rgb = quantizeBits(frag_color.rgb, vec3(5,5,5));
+  frag_color = final_color;
+
 
 }
 
