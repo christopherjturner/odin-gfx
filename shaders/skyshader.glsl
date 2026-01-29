@@ -40,7 +40,7 @@ void main() {
 
   // Lock view position to camera (skybox effect)
   mat4 v = view;
-  v[3] = vec4(0.0, -scale * 0.5, 0.0, 1.0);
+  v[3] = vec4(0.0, -scale * 0.25, 0.0, 1.0);
 
   gl_Position = proj * v * vec4(scaled_pos, 1.0);
 }

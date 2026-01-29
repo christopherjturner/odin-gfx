@@ -233,9 +233,8 @@ frame :: proc "c" () {
 
     // Pass 1: Render to texture
     sg.begin_pass({
-        action = state.offscreen.pass.action,
-        attachments = state.offscreen.pass.attachments,
-        swapchain = sglue.swapchain()
+        action      = state.offscreen.pass.action,
+        attachments = state.offscreen.pass.attachments
     })
 
     // SKY (this doesnt write to the depth buffer, so we draw it first)
@@ -328,16 +327,14 @@ event :: proc "c" (e: ^sapp.Event) {
     }
 }
 
-
+// used for positioning the cube. delete soon
 compute_mvp :: proc (rx, ry: f32) -> [16]f32 {
-
-    h := get_terrain_height(&state.terrain, 0, 0) + 0.5
-    model := glsl.mat4Translate({0, h, 0})
-
-    model  = model * glsl.mat4Rotate({1, 0, 0}, rx)
-    model  = model * glsl.mat4Rotate({0, 1, 0}, ry)
+    h         := get_terrain_height(&state.terrain, 0, 0) + 0.5
+    model     := glsl.mat4Translate({0, h, 0})
+    model      = model * glsl.mat4Rotate({1, 0, 0}, rx)
+    model      = model * glsl.mat4Rotate({0, 1, 0}, ry)
     view_proj := get_view_proj(&state.camera)
-    mvp := view_proj * model
+    mvp       := view_proj * model
     return transmute([16]f32)mvp
 }
 
@@ -349,6 +346,7 @@ cleanup :: proc "c" () {
     sdtx.shutdown()
     sg.shutdown()
 }
+
 
 main :: proc() {
     sapp.run({

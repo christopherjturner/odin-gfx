@@ -51,7 +51,9 @@ vec3 quantizeBits(vec3 c, vec3 bits) {
 }
 
 void main() {
+
   vec2 uv2 = uv;
+
   if(enable > 0.0) {
     uv2 = uv;
   } else {
@@ -59,6 +61,7 @@ void main() {
     vec2 tex_size = vec2(textureSize(sampler2D(dtex, dsmp), 0));
     uv2 = (floor(uv2 * tex_size) + 0.5) / tex_size;
   }
+
 
 
   // dithering, looks kinda janky
@@ -76,8 +79,6 @@ void main() {
   //final_color = final_color * dithered;
 
   frag_color = final_color;
-
-
 }
 
 @end
