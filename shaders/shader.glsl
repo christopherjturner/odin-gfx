@@ -62,7 +62,7 @@ void main() {
     float brightness = (tcol.r + tcol.g + tcol.b) / 3.0;
     float dithered = brightness > threshold ? 1.0 : 0.5;
 
-    frag_color = tcol * dithered;
+    frag_color = tcol; // * dithered;
 }
 
 

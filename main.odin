@@ -247,6 +247,7 @@ frame :: proc "c" () {
     //draw_grid(&state.camera)
 
     // CUBE
+    /*
     sg.apply_pipeline(state.offscreen.pip)
     sg.apply_bindings(state.offscreen.bind)
     vs_params := Vs_Params {
@@ -254,9 +255,9 @@ frame :: proc "c" () {
     }
     sg.apply_uniforms(UB_vs_params, { ptr = &vs_params, size = size_of(vs_params) })
     sg.draw(0, 36, 1)
-
+    */
     // Billboards
-    //draw_billboards(&state.billboards, &state.camera)
+    draw_billboards(&state.billboards, &state.camera)
 
     sg.end_pass()
 

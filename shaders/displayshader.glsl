@@ -43,7 +43,20 @@ const mat4 bayerMatrix = mat4(
     15.0, 7.0, 13.0, 5.0
 ) / 16.0;
 
+float bayer4x4(vec2 p) {
+    int x = int(mod(p.x, 4.0));
+    int y = int(mod(p.y, 4.0));
+    int index = x + y * 4;
 
+    float dither[16] = float[](
+         0.0,  8.0,  2.0, 10.0,
+        12.0,  4.0, 14.0,  6.0,
+         3.0, 11.0,  1.0,  9.0,
+        15.0,  7.0, 13.0,  5.0
+    );
+
+    return dither[index] / 16.0 - 0.5;
+}
 
 vec3 quantizeBits(vec3 c, vec3 bits) {
     vec3 levels = pow(vec3(2.0), bits) - 1.0;
@@ -65,20 +78,26 @@ void main() {
 
 
   // dithering, looks kinda janky
-  int x = int(mod(gl_FragCoord.x, 4.0));
-  int y = int(mod(gl_FragCoord.y, 4.0));
+  vec2 srcSize = vec2(640.0, 480.0);      // original resolution
+  vec2 dstSize = resolution;              // screen resolution
 
+  vec2 srcUV = floor(gl_FragCoord.xy * srcSize / dstSize) / srcSize;
+  vec2 srcPixel = floor(srcUV * resolution);
+  float d   = bayer4x4(srcPixel);
 
-  float threshold  = bayerMatrix[x][y];
-  vec4 tcol        = texture(sampler2D(dtex, dsmp), uv2);
-  float brightness = (tcol.r + tcol.g + tcol.b) / 3.0;
-  float dithered   = brightness > threshold ? 1.0 : 0.5;
+  vec3 color = texture(sampler2D(dtex, dsmp), uv2).rgb;
 
-  vec4 final_color = tcol;
-  //final_color = vec4(quantizeBits(final_color.rgb, vec3(5,6,5)), 1.0);
-  //final_color = final_color * dithered;
+  // strength depends on bit depth
+  //float strength = 1.0 / 64.0;
+  //color += d * strength;
 
-  frag_color = final_color;
+  // quantise
+  //color.r = floor(color.r * 31.0) / 31.0;
+  //  color.g = floor(color.g * 63.0) / 63.0;
+  //color.b = floor(color.b * 31.0) / 31.0;
+
+  frag_color = vec4(color, 1.0);
+
 }
 
 @end
