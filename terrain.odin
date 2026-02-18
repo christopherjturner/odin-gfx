@@ -235,5 +235,6 @@ get_terrain_height :: proc(terrain: ^Terrain_Renderer, world_x, world_z: f32) ->
         result = (h11 + (1.0 - tx) * (h01 - h11) + (1.0 - tz) * (h10 - h11))
     }
 
-    return (result * terrain.scale.y) + terrain.pos.y
+    result_height_scaled := (result * terrain.scale.y) + terrain.pos.y
+    return result_height_scaled
 }

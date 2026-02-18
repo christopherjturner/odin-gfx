@@ -12,7 +12,6 @@ import sglue "./sokol/glue"
 import sdtx "./sokol/debugtext"
 import "core:math/linalg/glsl"
 
-import m "./math"
 import "./shaders"
 
 FONT_KC853 :: 0
@@ -43,13 +42,14 @@ state: struct {
         bind: sg.Bindings,
         count: i32,
     },
-    sky: Sky_Renderer,
+    meshes:     Mesh_Renderer,
+    sky:        Sky_Renderer,
     billboards: Billboard_Renderer,
-    terrain: Terrain_Renderer,
+    terrain:    Terrain_Renderer,
     rx, ry, vx, vy: f32,
     camera: Camera,
     keys: Actions,
-    debug_ui: ^Debug_UI,
+    debug_ui:   ^Debug_UI,
 }
 
 Vertex :: struct {
@@ -67,6 +67,7 @@ Grid_Vertex :: struct {
 init :: proc "c" () {
     context = runtime.default_context()
     using shaders
+
     sg.setup({
         environment = sglue.environment(),
         logger = { func = slog.func },
@@ -89,7 +90,6 @@ init :: proc "c" () {
 
     // init camera
     state.camera = init_camera(sapp.widthf() / sapp.heightf())
-    //sapp.lock_mouse(true)
 
     uv_max :: 1024 * 6
     vertices := [?]Vertex {
@@ -138,37 +138,37 @@ init :: proc "c" () {
     }
     state.offscreen.bind.index_buffer = sg.make_buffer({
         usage = { index_buffer = true },
-        data = { ptr = &indices, size = size_of(indices) },
+        data  = { ptr = &indices, size = size_of(indices) },
     })
 
     // Texture Loading
-    t_width, t_height, t_chan: i32
-    pixels := img.load("./texture.png", &t_width, &t_height, &t_chan, 4)
-    if pixels == nil {
-        fmt.println("image failed to load")
-        sapp.quit()
-    }
-    defer img.image_free(pixels)
-
-    img_desc := sg.Image_Desc {
-        width = t_width,
-        height = t_height,
-        pixel_format = .RGBA8,
-    }
-
-    img_desc.data.mip_levels[0] = {
-        ptr  = pixels,
-        size = uint(t_width * t_height * 4),
-    }
-
-    state.offscreen.bind.views[VIEW_tex] = sg.make_view({
-        texture = {
-            image = sg.make_image(img_desc)
+    {
+        t_width, t_height, t_chan: i32
+        pixels := img.load("./texture.png", &t_width, &t_height, &t_chan, 4)
+        if pixels == nil {
+            panic("image failed to load")
         }
-    })
+        defer img.image_free(pixels)
 
-    state.offscreen.bind.samplers[SMP_smp] = sg.make_sampler({})
+        img_desc := sg.Image_Desc {
+            width = t_width,
+            height = t_height,
+            pixel_format = .RGBA8,
+        }
 
+        img_desc.data.mip_levels[0] = {
+            ptr  = pixels,
+            size = uint(t_width * t_height * 4),
+        }
+
+        state.offscreen.bind.views[VIEW_tex] = sg.make_view({
+            texture = {
+                image = sg.make_image(img_desc)
+            }
+        })
+
+        state.offscreen.bind.samplers[SMP_smp] = sg.make_sampler({})
+    }
     // Skybox
     state.sky = init_sky()
 
@@ -177,17 +177,20 @@ init :: proc "c" () {
 
     // Billboards
     state.billboards = init_billboards()
-    // @hack
+
+    // @TODO: init the instances in the billboard system
     state.billboards.instances[0].pos.y = get_terrain_height(&state.terrain, state.billboards.instances[0].pos.x,state.billboards.instances[0].pos.z) + 1.0
     state.billboards.instances[1].pos.y = get_terrain_height(&state.terrain, state.billboards.instances[1].pos.x,state.billboards.instances[1].pos.z) + 1.0
 
+    // Meshes
+    state.meshes = init_meshes()
 
     // Grid generation
     init_grid()
 
     // Display Pipeline setup
-    offscreen_img := init_offscreen_renderer()
-    init_display_renderer(offscreen_img)
+    offscreen_img, offscreen_depth_img := init_offscreen_renderer()
+    init_display_renderer(offscreen_img, offscreen_depth_img)
 
     // UIs
     state.debug_ui = init_debug_ui();
@@ -256,6 +259,9 @@ frame :: proc "c" () {
     sg.apply_uniforms(UB_vs_params, { ptr = &vs_params, size = size_of(vs_params) })
     sg.draw(0, 36, 1)
     */
+
+    draw_meshes(&state.meshes, &state.camera)
+    
     // Billboards
     draw_billboards(&state.billboards, &state.camera)
 
@@ -330,7 +336,7 @@ event :: proc "c" (e: ^sapp.Event) {
 
 // used for positioning the cube. delete soon
 compute_mvp :: proc (rx, ry: f32) -> [16]f32 {
-    h         := get_terrain_height(&state.terrain, 0, 0) + 0.5
+    h         := get_terrain_height(&state.terrain, 0, 0) + 4.0
     model     := glsl.mat4Translate({0, h, 0})
     model      = model * glsl.mat4Rotate({1, 0, 0}, rx)
     model      = model * glsl.mat4Rotate({0, 1, 0}, ry)
@@ -350,6 +356,7 @@ cleanup :: proc "c" () {
 
 
 main :: proc() {
+
     sapp.run({
         init_cb      = init,
         frame_cb     = frame,
@@ -366,7 +373,7 @@ main :: proc() {
 }
 
 
-init_offscreen_renderer :: proc() -> sg.Image {
+init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
     using shaders
     // Offscreen Pipeline setup
     state.offscreen.pip = sg.make_pipeline({
@@ -398,6 +405,7 @@ init_offscreen_renderer :: proc() -> sg.Image {
         pixel_format = .RGBA8,
         sample_count = 1,
     })
+
     depth_img := sg.make_image({
         usage = { depth_stencil_attachment = true },
         width = OFFSCREEN_WIDTH,
@@ -420,10 +428,10 @@ init_offscreen_renderer :: proc() -> sg.Image {
         depth = { load_action = .CLEAR, clear_value = 1.0 },
     }
 
-    return color_img
+    return color_img, depth_img
 }
 
-init_display_renderer :: proc(color_img: sg.Image) {
+init_display_renderer :: proc(color_img: sg.Image, depth_img: sg.Image) {
     using shaders
     state.display.pip = sg.make_pipeline({
         shader = sg.make_shader(display_shader_desc(sg.query_backend())),
@@ -434,9 +442,20 @@ init_display_renderer :: proc(color_img: sg.Image) {
         texture = { image = color_img },
     })
 
+    state.display.bind.views[VIEW_depthTex] = sg.make_view({
+        texture = { image = depth_img },
+    })
+
     state.display.bind.samplers[SMP_smp] = sg.make_sampler({
         min_filter = .LINEAR, //NEAREST,
         mag_filter = .LINEAR,
+        wrap_u = .REPEAT,
+        wrap_v = .REPEAT,
+    })
+
+    state.display.bind.samplers[SMP_depthSmp] = sg.make_sampler({
+        min_filter = .NEAREST,
+        mag_filter = .NEAREST,
         wrap_u = .REPEAT,
         wrap_v = .REPEAT,
     })
@@ -447,5 +466,4 @@ init_display_renderer :: proc(color_img: sg.Image) {
         },
         depth = { load_action = .CLEAR, clear_value = 1.0 },
     }
-
 }

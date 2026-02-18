@@ -48,7 +48,7 @@ init_billboards :: proc() -> Billboard_Renderer {
 
     pixels := img.load("./assets/billboard.png", &t_width, &t_height, &t_chan, 4)
     if pixels == nil {
-        fmt.println("image failed to load")
+        panic("image failed to load")
     }
     defer img.image_free(pixels)
     fmt.printf("texture: %d %d %d", t_width, t_height, t_chan)

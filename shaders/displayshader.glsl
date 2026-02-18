@@ -33,6 +33,10 @@ layout(binding=0) uniform display_fs_params {
 
 layout(binding=0) uniform texture2D dtex;
 layout(binding=0) uniform sampler dsmp;
+
+layout(binding=1) uniform texture2D depthTex;
+layout(binding=1) uniform sampler depthSmp;
+
 in vec2 uv;
 out vec4 frag_color;
 
@@ -58,9 +62,19 @@ float bayer4x4(vec2 p) {
     return dither[index] / 16.0 - 0.5;
 }
 
+
+const float near = 0.1;
+const float far =  1000.0;
+const float fog_start = 200.0;
+const float fog_end = 450.0;
+
 vec3 quantizeBits(vec3 c, vec3 bits) {
     vec3 levels = pow(vec3(2.0), bits) - 1.0;
     return floor(c * levels) / levels;
+}
+
+float linearize_depth(float z) {
+  return (2.0 * near * far) / (far + near - (z * 2.0 - 1.0) * (far - near));
 }
 
 void main() {
@@ -81,21 +95,29 @@ void main() {
   vec2 srcSize = vec2(640.0, 480.0);      // original resolution
   vec2 dstSize = resolution;              // screen resolution
 
-  vec2 srcUV = floor(gl_FragCoord.xy * srcSize / dstSize) / srcSize;
+  vec2 srcUV    = floor(gl_FragCoord.xy * srcSize / dstSize) / srcSize;
   vec2 srcPixel = floor(srcUV * resolution);
-  float d   = bayer4x4(srcPixel);
+  float d       = bayer4x4(srcPixel);
 
   vec3 color = texture(sampler2D(dtex, dsmp), uv2).rgb;
 
+  // depth fog
+  float depth = texture(sampler2D(depthTex, depthSmp), uv2).r;
+  float dist = linearize_depth(depth);
+  vec4 fog_color = vec4(0.5, 0.5, 0.5, 1.0);
+  float fog_factor = clamp( (dist - fog_start) / (fog_end - fog_start ), 0.0, 1.0);
+  color = mix(color, fog_color.rgb, fog_factor);
+
   // strength depends on bit depth
-  //float strength = 1.0 / 64.0;
-  //color += d * strength;
+  float strength = 1.0 / 64.0;
+  color += d * strength;
 
   // quantise
-  //color.r = floor(color.r * 31.0) / 31.0;
-  //  color.g = floor(color.g * 63.0) / 63.0;
-  //color.b = floor(color.b * 31.0) / 31.0;
+  color.r = floor(color.r * 31.0) / 31.0;
+  color.g = floor(color.g * 63.0) / 63.0;
+  color.b = floor(color.b * 31.0) / 31.0;
 
+  // Final Color
   frag_color = vec4(color, 1.0);
 
 }
