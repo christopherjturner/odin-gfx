@@ -9,6 +9,11 @@ import sg "./sokol/gfx"
 import "./shaders"
 
 
+// usage: Vec3 :: glsl.vec3
+Vec3 :: glsl.vec3
+Quat :: glsl.quat
+Mat4 :: glsl.mat4
+
 // A heighmap terrain generator
 
 Terrain_Vertex :: struct {
@@ -237,4 +242,46 @@ get_terrain_height :: proc(terrain: ^Terrain_Renderer, world_x, world_z: f32) ->
 
     result_height_scaled := (result * terrain.scale.y) + terrain.pos.y
     return result_height_scaled
+}
+
+
+get_terrain_sample :: proc(terrain: ^Terrain_Renderer, world_x, world_z: f32) -> (elevation: f32, normal: Vec3) {
+    // 1. Transform world coordinates to grid coordinates
+    gx := (world_x - terrain.pos.x) / terrain.scale.x
+    gz := (world_z - terrain.pos.z) / terrain.scale.z
+    // 2. Get the integer grid cell
+    ix := int(math.floor(gx))
+    iz := int(math.floor(gz))
+    // Boundary check
+    if ix < 0 || ix >= int(terrain.width) - 1 || iz < 0 || iz >= int(terrain.height) - 1 {
+        return 10.0, Vec3{0, 1, 0}
+    }
+    // 3. Find coordinates within the single quad
+    tx := gx - f32(ix)
+    tz := gz - f32(iz)
+    // 4. Get the 4 corner data
+    stride := int(terrain.width)
+    v00 := terrain.verts[iz * stride + ix]
+    v10 := terrain.verts[iz * stride + (ix + 1)]
+    v01 := terrain.verts[(iz + 1) * stride + ix]
+    v11 := terrain.verts[(iz + 1) * stride + (ix + 1)]
+    h00, n00 := v00.height, Vec3(v00.normal)
+    h10, n10 := v10.height, Vec3(v10.normal)
+    h01, n01 := v01.height, Vec3(v01.normal)
+    h11, n11 := v11.height, Vec3(v11.normal)
+    // 5. Triangle Interpolation
+    h_result: f32
+    n_result: Vec3
+    if tx <= (1.0 - tz) {
+        // Upper-left triangle
+        h_result = h00 + tx * (h10 - h00) + tz * (h01 - h00)
+        n_result = n00 + tx * (n10 - n00) + tz * (n01 - n00)
+    } else {
+        // Lower-right triangle
+        h_result = h11 + (1.0 - tx) * (h01 - h11) + (1.0 - tz) * (h10 - h11)
+        n_result = n11 + (1.0 - tx) * (n01 - n11) + (1.0 - tz) * (n10 - n11)
+    }
+    elevation = (h_result * terrain.scale.y) + terrain.pos.y
+    normal = glsl.normalize(n_result)
+    return
 }
