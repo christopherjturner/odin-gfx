@@ -102,13 +102,12 @@ void main() {
   vec3 color = texture(sampler2D(dtex, dsmp), uv2).rgb;
 
   // depth fog
+
   float depth = texture(sampler2D(depthTex, depthSmp), uv2).r;
   float dist = linearize_depth(depth);
   vec4 fog_color = vec4(0.5, 0.5, 0.5, 1.0);
-  float fog_factor = clamp( (dist - fog_start) / (fog_end - fog_start ), 0.0, 1.0);
+  float fog_factor = clamp( (dist - fog_start) / (fog_end - fog_start ), 0.0, 0.0);
   color = mix(color, fog_color.rgb, fog_factor);
-
-  // strength depends on bit depth
   float strength = 1.0 / 64.0;
   color += d * strength;
 
