@@ -27,6 +27,12 @@ load_mesh :: proc(filename: cstring) -> (sg.Buffer, sg.Buffer, i32) {
         panic("failed to load buffers")
     }
 
+    fmt.printf("\n%s: mesh count %d\n", filename, len(data.meshes))
+
+    for m in data.meshes {
+        fmt.printf("\n%s: mesh\n", m.name)
+    }
+
     // load vert data
     p := data.meshes[0].primitives[0]
     count := cast(int)p.attributes[0].data.count

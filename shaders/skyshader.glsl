@@ -143,7 +143,7 @@ void main() {
   vec4 sky_color = mix(horizon_now, zenith_now, blend);
 
   // Add stars
-  sky_color += vec4(stars(dir, 0.995, 800.0, game_time), 1.0);
+  sky_color += vec4(stars(dir, 0.998, 1600.0, game_time), 1.0);
 
   // Add sun
   sky_color = moon(drawSun(sky_color));

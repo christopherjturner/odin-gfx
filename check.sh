@@ -13,5 +13,9 @@ echo billboard
 ../../sokol/sokol-tools-bin/bin/linux/sokol-shdc -i shaders/billboard.glsl -o shaders/billboard.odin -l glsl430 -f sokol_odin
 echo terrain
 ../../sokol/sokol-tools-bin/bin/linux/sokol-shdc -i shaders/terrain.glsl -o shaders/terrain.odin -l glsl430 -f sokol_odin
+echo mesh
+../../sokol/sokol-tools-bin/bin/linux/sokol-shdc -i shaders/meshshader.glsl -o shaders/meshshader.odin -l glsl430 -f sokol_odin
+echo stars
+../../sokol/sokol-tools-bin/bin/linux/sokol-shdc -i shaders/starshader.glsl -o shaders/starshader.odin -l glsl430 -f sokol_odin
 
 odin check .

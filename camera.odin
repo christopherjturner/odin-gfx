@@ -29,7 +29,7 @@ init_camera :: proc(aspect: f32) -> Camera {
         pitch    = 0.0,
         fov      = 45.0,
         aspect   = aspect,
-        speed    = 40.0,
+        speed    = 50.0,
         sens     = 0.1,
     }
     update_camera(&cam)

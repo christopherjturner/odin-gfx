@@ -3,6 +3,11 @@ package main
 import sg "./sokol/gfx"
 import "./shaders"
 
+Grid_Vertex :: struct {
+    pos: [3]f32,
+    color: [4]f32,
+}
+
 init_grid :: proc() {
     using shaders
     grid_verts, grid_count := create_grid()

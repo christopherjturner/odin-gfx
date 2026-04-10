@@ -28,7 +28,7 @@ init_meshes :: proc() -> Mesh_Renderer {
 
     // TODO: dynamically load the mesh_renderer from data.
     // TODO: pack all the mesh_renderer into a single vertex bufffer.
-    mesh_vb, mesh_ib, mesh_ibc := load_mesh("./assets/npc.glb")
+    mesh_vb, mesh_ib, mesh_ibc := load_mesh("./assets/dovecote.glb")
 
     mesh_renderer.bind.vertex_buffers[0] = mesh_vb
     mesh_renderer.bind.index_buffer = mesh_ib
@@ -54,7 +54,7 @@ init_meshes :: proc() -> Mesh_Renderer {
     // Texture loader
     // TODO: centralize texture loading since we're repeating this alot
     t_width, t_height, t_chan: i32
-    pixels := img.load("./assets/textures/npc1.png", &t_width, &t_height, &t_chan, 4)
+    pixels := img.load("./assets/textures/dovecote.png", &t_width, &t_height, &t_chan, 4)
     if pixels == nil {
         panic("image failed to load")
     }
@@ -89,15 +89,19 @@ draw_meshes :: proc(mesh_renderer: ^Mesh_Renderer, camera: ^Camera) {
     sg.apply_bindings(mesh_renderer.bind)
 
     // TODO: move this to a per instace field
-    h         := get_terrain_height(&state.terrain, 0, 0) + 4.0
+    h         := get_terrain_height(&state.terrain, 0, 0) + 5.0
     model_mat := glsl.identity(glsl.mat4) * glsl.mat4Translate({0, h, 0})
     view_proj := get_view_proj(camera)
     mvp       := view_proj * model_mat
 
     vs_params := shaders.Mesh_Vs_Params {
-        mvp   = transmute([16]f32)mvp,
-        model = transmute([16]f32)model_mat,
+        mvp           = transmute([16]f32)mvp,
+        model         = transmute([16]f32)model_mat,
+        ambient_color = state.sky.state.now.ambient_color,
+        sun_color     = state.sky.state.now.sun_color, // * state.sky.state.now.sun_intensity,
+        u_sun_dir     = state.sky.state.sun_dir,
     }
+
     sg.apply_uniforms(shaders.UB_mesh_vs_params, { ptr = &vs_params, size = size_of(vs_params) })
     sg.draw(0, mesh_renderer.models[0].idx_count, 1)
 }

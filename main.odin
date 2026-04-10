@@ -29,40 +29,29 @@ OFFSCREEN_HEIGHT :: 480
 state: struct {
     offscreen: struct {
         pass: sg.Pass,
-        pip: sg.Pipeline,
+        pip:  sg.Pipeline,
         bind: sg.Bindings,
     },
     display: struct {
         pass: sg.Pass_Action,
-        pip: sg.Pipeline,
+        pip:  sg.Pipeline,
         bind: sg.Bindings,
     },
     grid: struct {
-        pip: sg.Pipeline,
+        pip:  sg.Pipeline,
         bind: sg.Bindings,
         count: i32,
     },
     meshes:     Mesh_Renderer,
     sky:        Sky_Renderer,
+    stars:      Star_Renderer,
     billboards: Billboard_Renderer,
     terrain:    Terrain_Renderer,
-    rx, ry, vx, vy: f32,
-    camera: Camera,
-    keys: Actions,
+    camera:     Camera,
+    keys:       Actions,
     debug_ui:   ^Debug_UI,
+    rx, ry, vx, vy: f32,
 }
-
-Vertex :: struct {
-    x, y, z: f32,
-    color: u32,
-    u, v: u16,
-}
-
-Grid_Vertex :: struct {
-    pos: [3]f32,
-    color: [4]f32,
-}
-
 
 init :: proc "c" () {
     context = runtime.default_context()
@@ -91,86 +80,9 @@ init :: proc "c" () {
     // init camera
     state.camera = init_camera(sapp.widthf() / sapp.heightf())
 
-    uv_max :: 1024 * 6
-    vertices := [?]Vertex {
-        // pos               color       uvs
-        { -1.0, -1.0, -1.0,  0xFF0000FF,     0,     0 },
-        {  1.0, -1.0, -1.0,  0xFF0000FF, uv_max,     0 },
-        {  1.0,  1.0, -1.0,  0xFF0000FF, uv_max, uv_max },
-        { -1.0,  1.0, -1.0,  0xFF0000FF,     0, uv_max },
-
-        { -1.0, -1.0,  1.0,  0xFF00FF00,     0,     0 },
-        {  1.0, -1.0,  1.0,  0xFF00FF00, uv_max,     0 },
-        {  1.0,  1.0,  1.0,  0xFF00FF00, uv_max, uv_max },
-        { -1.0,  1.0,  1.0,  0xFF00FF00,     0, uv_max },
-        { -1.0, -1.0, -1.0,  0xFFFF0000,     0,     0 },
-        { -1.0,  1.0, -1.0,  0xFFFF0000, uv_max,     0 },
-        { -1.0,  1.0,  1.0,  0xFFFF0000, uv_max, uv_max },
-        { -1.0, -1.0,  1.0,  0xFFFF0000,     0,  uv_max },
-
-        {  1.0, -1.0, -1.0,  0xFFFF007F,     0,     0 },
-        {  1.0,  1.0, -1.0,  0xFFFF007F, uv_max,     0 },
-        {  1.0,  1.0,  1.0,  0xFFFF007F, uv_max, uv_max },
-        {  1.0, -1.0,  1.0,  0xFFFF007F,     0, uv_max },
-
-        { -1.0, -1.0, -1.0,  0xFFFF7F00,     0,     0 },
-        { -1.0, -1.0,  1.0,  0xFFFF7F00, uv_max,     0 },
-        {  1.0, -1.0,  1.0,  0xFFFF7F00, uv_max, uv_max },
-        {  1.0, -1.0, -1.0,  0xFFFF7F00,     0, uv_max },
-
-        { -1.0,  1.0, -1.0,  0xFF007FFF,     0,     0 },
-        { -1.0,  1.0,  1.0,  0xFF007FFF, uv_max,     0 },
-        {  1.0,  1.0,  1.0,  0xFF007FFF, uv_max, uv_max },
-        {  1.0,  1.0, -1.0,  0xFF007FFF,     0, uv_max },
-    }
-
-    state.offscreen.bind.vertex_buffers[0] = sg.make_buffer({
-        data = { ptr = &vertices, size = size_of(vertices) },
-    })
-
-    indices := [?]u16 {
-        0, 1, 2,  0, 2, 3,
-        6, 5, 4,  7, 6, 4,
-        8, 9, 10,  8, 10, 11,
-        14, 13, 12,  15, 14, 12,
-        16, 17, 18,  16, 18, 19,
-        22, 21, 20,  23, 22, 20,
-    }
-    state.offscreen.bind.index_buffer = sg.make_buffer({
-        usage = { index_buffer = true },
-        data  = { ptr = &indices, size = size_of(indices) },
-    })
-
-    // Texture Loading
-    {
-        t_width, t_height, t_chan: i32
-        pixels := img.load("./texture.png", &t_width, &t_height, &t_chan, 4)
-        if pixels == nil {
-            panic("image failed to load")
-        }
-        defer img.image_free(pixels)
-
-        img_desc := sg.Image_Desc {
-            width = t_width,
-            height = t_height,
-            pixel_format = .RGBA8,
-        }
-
-        img_desc.data.mip_levels[0] = {
-            ptr  = pixels,
-            size = uint(t_width * t_height * 4),
-        }
-
-        state.offscreen.bind.views[VIEW_tex] = sg.make_view({
-            texture = {
-                image = sg.make_image(img_desc)
-            }
-        })
-
-        state.offscreen.bind.samplers[SMP_smp] = sg.make_sampler({})
-    }
     // Skybox
-    state.sky = init_sky()
+    state.sky  = init_sky()
+    state.stars = init_stars()
 
     // Terrain
     state.terrain = init_terrain()
@@ -229,10 +141,13 @@ frame :: proc "c" () {
     sdtx.origin(0.0, 2.0)
     sdtx.color3f(1.0, 0.0, 1.0)
     sdtx.font(FONT_CPC)
-    sdtx.printf("hello world %.1f %.1f \n", fps, t)
+    sdtx.printf("FPS %.1f %.1f \n", fps, t)
 
     view_proj := get_view_proj(&state.camera)
 
+    // Match the clear color to the sky
+    sky_col := state.sky.state.now.horizon_color;
+    state.offscreen.pass.action.colors[0].clear_value = { r = sky_col[0], g = sky_col[1], b = sky_col[2], a = 1.0 };
 
     // Pass 1: Render to texture
     sg.begin_pass({
@@ -240,8 +155,9 @@ frame :: proc "c" () {
         attachments = state.offscreen.pass.attachments
     })
 
-    // SKY (this doesnt write to the depth buffer, so we draw it first)
+    // SKY & stars (this doesnt write to the depth buffer, so we draw it first)
     draw_sky(&state.sky, &state.camera, t)
+    draw_stars(&state.stars, &state.camera, t)
 
     // Terrain
     draw_terrain(&state.terrain, &state.camera)
@@ -249,19 +165,8 @@ frame :: proc "c" () {
     // GRID
     //draw_grid(&state.camera)
 
-    // CUBE
-    /*
-    sg.apply_pipeline(state.offscreen.pip)
-    sg.apply_bindings(state.offscreen.bind)
-    vs_params := Vs_Params {
-        mvp = compute_mvp(state.rx, state.ry)
-    }
-    sg.apply_uniforms(UB_vs_params, { ptr = &vs_params, size = size_of(vs_params) })
-    sg.draw(0, 36, 1)
-    */
-
     draw_meshes(&state.meshes, &state.camera)
-    
+
     // Billboards
     draw_billboards(&state.billboards, &state.camera)
 
@@ -279,9 +184,9 @@ frame :: proc "c" () {
     if .Up in state.keys do flag = 1.0
 
     display_fs_params := Display_Fs_Params {
-        enable         = flag,
         resolution     = { sapp.widthf(), sapp.heightf(),  },
         inv_resolution = { 1.0 /sapp.widthf(), 1.0/sapp.heightf(), },
+        fog_color      = state.sky.state.now.horizon_color,
     }
     sg.apply_uniforms(UB_display_fs_params, { ptr = &display_fs_params, size = size_of(display_fs_params) })
 
@@ -399,17 +304,17 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 
     // setup the color and depth-stencil-attachment images and views
     color_img := sg.make_image({
-        usage = { color_attachment = true },
-        width = OFFSCREEN_WIDTH,
-        height = OFFSCREEN_HEIGHT,
+        usage        = { color_attachment = true },
+        width        = OFFSCREEN_WIDTH,
+        height       = OFFSCREEN_HEIGHT,
         pixel_format = .RGBA8,
         sample_count = 1,
     })
 
     depth_img := sg.make_image({
-        usage = { depth_stencil_attachment = true },
-        width = OFFSCREEN_WIDTH,
-        height = OFFSCREEN_HEIGHT,
+        usage        = { depth_stencil_attachment = true },
+        width        = OFFSCREEN_WIDTH,
+        height       = OFFSCREEN_HEIGHT,
         sample_count = 1,
         pixel_format = .DEPTH,
     })
@@ -421,9 +326,11 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
     state.offscreen.pass.attachments.depth_stencil = sg.make_view({
         depth_stencil_attachment = { image = depth_img },
     })
+
+    sky_col := state.sky.state.now.horizon_color;
     state.offscreen.pass.action = {
         colors = {
-            0 = { load_action = .CLEAR, clear_value = { 0.1, 0.1, 0.75, 1.0 } },
+            0 = { load_action = .CLEAR, clear_value = { r = sky_col[0], g = sky_col[1], b = sky_col[2], a = 1.0 } },
         },
         depth = { load_action = .CLEAR, clear_value = 1.0 },
     }
@@ -434,7 +341,7 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 init_display_renderer :: proc(color_img: sg.Image, depth_img: sg.Image) {
     using shaders
     state.display.pip = sg.make_pipeline({
-        shader = sg.make_shader(display_shader_desc(sg.query_backend())),
+        shader    = sg.make_shader(display_shader_desc(sg.query_backend())),
         cull_mode = .NONE
     })
 
@@ -449,16 +356,18 @@ init_display_renderer :: proc(color_img: sg.Image, depth_img: sg.Image) {
     state.display.bind.samplers[SMP_smp] = sg.make_sampler({
         min_filter = .LINEAR, //NEAREST,
         mag_filter = .LINEAR,
-        wrap_u = .REPEAT,
-        wrap_v = .REPEAT,
+        wrap_u     = .REPEAT,
+        wrap_v     = .REPEAT,
     })
 
     state.display.bind.samplers[SMP_depthSmp] = sg.make_sampler({
         min_filter = .NEAREST,
         mag_filter = .NEAREST,
-        wrap_u = .REPEAT,
-        wrap_v = .REPEAT,
+        wrap_u     = .REPEAT,
+        wrap_v     = .REPEAT,
     })
+
+    sky_col := state.sky.state.now.horizon_color;
 
     state.display.pass = {
         colors = {

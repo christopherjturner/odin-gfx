@@ -68,13 +68,13 @@ init_sky :: proc() -> Sky_Renderer {
                 ATTR_sky_pos = {format = .FLOAT3},
             },
         },
-        index_type = .UINT16,
         depth = {
             compare       = .LESS_EQUAL,      // TODO: revert this back to actually checking
             write_enabled = false,
         },
-        cull_mode = .BACK,
-        shader    = sky_shader,
+        index_type = .UINT16,
+        cull_mode  = .BACK,
+        shader     = sky_shader,
     })
 
     return sky
@@ -287,16 +287,12 @@ interpolate_keyframes :: proc(k0, k1: Sky_Color, t: f32) -> Sky_Color {
     result.horizon_color = math.lerp(k0.horizon_color, k1.horizon_color, t)
     result.zenith_color  = math.lerp(k0.zenith_color, k1.zenith_color, t)
 
-    /*
     // Moonlight contribution
-    if state.time_of_day < 0.25 || state.time_of_day > 0.75 {
-        moon_factor := state.time_of_day < 0.25 ? 
-            (0.25 - state.time_of_day) / 0.25 : 
-            (state.time_of_day - 0.75) / 0.25
-        moon_contrib := [3]f32{0.15, 0.15, 0.2} * moon_factor * 0.3
-        lighting.ambient_color += moon_contrib
+    if result.time < 0.25 || result.time > 0.75 {
+        moon_factor := result.time < 0.25 ? (0.25 - result.time) / 0.25 : (result.time - 0.75) / 0.25
+        moon_contrib := [4]f32{0.2, 0.2, 0.2, 1.0} * moon_factor
+        result.ambient_color += moon_contrib
     }
-    */
 
     return result
 }
