@@ -28,13 +28,14 @@ vec3 rotate_axis(vec3 v, vec3 axis, float a) {
 }
 
 void main() {
-  const float scale = 50.0;
+  const float scale = 500.0;
 
   vec3 scaled_pos = pos * scale;
   dir = normalize(scaled_pos);
 
   // Apply Earth's axial tilt (23.4 degrees)
   const float tilt = radians(23.4);
+
   vec3 pole = normalize(vec3(sin(tilt), cos(tilt), 0.0));
   dir = rotate_axis(dir, pole, game_time * 0.001);
 
@@ -83,7 +84,7 @@ vec3 stars(vec3 dir, float threshold, float grid, float t) {
   star = pow(star, 10.0);
 
   // Twinkle effect
-  float twinkle = 0.5 + 0.25 * sin((t * 5) * dir.x * dir.y);
+  float twinkle = 0.5 + 0.15 * sin((t * 5) * dir.x * dir.y);
 
   return vec3(star * star_mask * twinkle);
 }
@@ -143,10 +144,10 @@ void main() {
   vec4 sky_color = mix(horizon_now, zenith_now, blend);
 
   // Add stars
-  sky_color += vec4(stars(dir, 0.998, 1600.0, game_time), 1.0);
+  //sky_color += vec4(stars(dir, 0.995, 1600.0, game_time) * 0.5, 1.0);
 
   // Add sun
-  sky_color = moon(drawSun(sky_color));
+  //sky_color = moon(drawSun(sky_color));
 
   frag_color = sky_color;
 }

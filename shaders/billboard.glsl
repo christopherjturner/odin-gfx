@@ -19,6 +19,7 @@ in vec4 pos;
 in vec2 uv;
 in vec3 inst_pos;
 in float inst_scale;
+in vec4 inst_color;
 
 out vec4 color;
 out vec2 texcoord;
@@ -36,7 +37,7 @@ void main() {
 
     gl_Position = view_proj * vec4(world_pos, 1.0);
     texcoord = uv;
-    color = ambient_color;
+    color = inst_color * ambient_color;
 }
 @end
 

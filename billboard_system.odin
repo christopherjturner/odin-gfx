@@ -16,6 +16,7 @@ Billboard_Vertex :: struct {
 Billboard_Instance :: struct {
     pos:   [3]f32,
     scale: f32,
+    color: [4]f32,
 }
 
 Billboard_Renderer :: struct {
@@ -54,8 +55,8 @@ init_billboards :: proc() -> Billboard_Renderer {
     fmt.printf("texture: %d %d %d", t_width, t_height, t_chan)
 
     img_desc := sg.Image_Desc {
-        width = t_width,
-        height = t_height,
+        width        = t_width,
+        height       = t_height,
         pixel_format = .RGBA8,
     }
 
@@ -93,6 +94,8 @@ init_billboards :: proc() -> Billboard_Renderer {
                 ATTR_billboard_uv         = { buffer_index = 0, format = .FLOAT2 },
                 ATTR_billboard_inst_pos   = { buffer_index = 1, format = .FLOAT3 },
                 ATTR_billboard_inst_scale = { buffer_index = 1, format = .FLOAT  },
+                ATTR_billboard_inst_color = { buffer_index = 1, format = .FLOAT4 },
+
             },
         },
         depth = {
@@ -101,7 +104,10 @@ init_billboards :: proc() -> Billboard_Renderer {
         },
     })
 
-    billboard.instances = { {{2, 0.5, 2}, 1.0}, {{-1, 1, 1}, 1.0}, {{32, 2, 30}, 1.0} }
+    billboard.instances = {
+        {{2, 0.5, 2}, 5.0, {1, 1, 1, 1}},
+        {{-1, 1, 1},  10.0, {1, 1, 1, 1}},
+        {{32, 2, 30}, 10.0, {1, 1, 1, 1}} }
 
     return billboard
 }

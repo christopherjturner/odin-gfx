@@ -19,6 +19,7 @@ in vec4 pos;
 in vec2 uv;
 in vec3 inst_pos;
 in float inst_scale;
+in vec4 inst_color;
 
 out vec4 color;
 out vec2 texcoord;
@@ -33,7 +34,7 @@ void main() {
   vec3 camera_right = vec3(v[0][0], v[1][0], v[2][0]);
   vec3 camera_up    = vec3(v[0][1], v[1][1], v[2][1]);
 
-  float sky_distance = 300.0;
+  float sky_distance = 500.0;
 
   // Calculate vertex position in world space
   vec3 world_pos = (inst_pos * sky_distance)
@@ -41,11 +42,10 @@ void main() {
         + camera_up    * pos.y * inst_scale;
 
 
-    gl_Position = proj * v * vec4(world_pos, 1.0);
-    gl_Position.z = gl_Position.w;
-
+    gl_Position   = proj * v * vec4(world_pos, 1.0);
+    //gl_Position.z = gl_Position.w;
     texcoord = uv;
-    color = vec4(1.0, 1.0, 1.0, 0.5);
+    color    = inst_color;
 }
 @end
 

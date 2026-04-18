@@ -152,6 +152,14 @@ layout_debug_ui :: proc(ctx: ^mu.Context) {
         mu.label(ctx, "time of day")
         f32_slider(ctx, &state.sky.state.time_of_day, 0.0, 1.0)
 
+        mu.layout_row(ctx, {100, -1})
+        mu.label(ctx, "fog start")
+        f32_slider(ctx, &state.world.fog_start, 0.0, 400.0)
+
+        mu.layout_row(ctx, {100, -1})
+        mu.label(ctx, "fog end")
+        f32_slider(ctx, &state.world.fog_end, 0.0, 800.0)
+
 
         for i := 0; i < len(sky_palette.keyframes); i += 1 {
             mu.layout_row(ctx, {sw, sw, sw, sw, -1})

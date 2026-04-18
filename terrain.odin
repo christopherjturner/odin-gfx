@@ -186,10 +186,13 @@ draw_terrain :: proc(terrain: ^Terrain_Renderer, cam: ^Camera) {
         u_camera_pos  = cam.position,
         ambient_color = state.sky.state.now.ambient_color,
         sun_color     = state.sky.state.now.sun_color, // * state.sky.state.now.sun_intensity,
+        fog_color     = state.sky.state.now.horizon_color, // * state.sky.state.now.sun_intensity,
         chunk_pos     = terrain.pos,
         scale         = terrain.scale,
         u_grid_width  = terrain.width,
         u_sun_dir     = state.sky.state.sun_dir,
+        u_fog_start   = state.world.fog_start,
+        u_fog_end     = state.world.fog_end,
     }
 
     sg.apply_pipeline(terrain.pip)

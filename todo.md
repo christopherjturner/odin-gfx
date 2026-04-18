@@ -8,5 +8,8 @@
     - data driven time of day colors
     - debug UI for tweaking shader values
 + load and render a billboard
-- load and render a mesh
-- add simple terrain mesh generator/renderer
++ load and render a mesh
++ add simple terrain mesh generator/renderer
+
+- Water plane
+- Refactor time/game state

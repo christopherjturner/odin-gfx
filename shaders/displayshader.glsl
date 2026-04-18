@@ -29,6 +29,8 @@ layout(binding=0) uniform display_fs_params {
   vec2 resolution;
   vec2 inv_resolution;
   vec4 fog_color;
+  float fog_start;
+  float fog_end;
 };
 
 layout(binding=0) uniform texture2D dtex;
@@ -42,8 +44,6 @@ out vec4 frag_color;
 
 const float near      = 0.1;
 const float far       = 1000.0;
-const float fog_start = 150.0;
-const float fog_end   = 250.0;
 
 const vec3  quant     = vec3(6.0, 7.0, 6.0);
 const vec3  qstep     = 1.0 / quant;

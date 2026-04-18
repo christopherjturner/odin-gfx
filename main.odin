@@ -42,6 +42,10 @@ state: struct {
         bind: sg.Bindings,
         count: i32,
     },
+    world: struct {
+        fog_start: f32,
+        fog_end: f32,
+    },
     meshes:     Mesh_Renderer,
     sky:        Sky_Renderer,
     stars:      Star_Renderer,
@@ -50,7 +54,6 @@ state: struct {
     camera:     Camera,
     keys:       Actions,
     debug_ui:   ^Debug_UI,
-    rx, ry, vx, vy: f32,
 }
 
 init :: proc "c" () {
@@ -104,6 +107,11 @@ init :: proc "c" () {
     offscreen_img, offscreen_depth_img := init_offscreen_renderer()
     init_display_renderer(offscreen_img, offscreen_depth_img)
 
+    state.world = {
+        fog_start = 50,
+        fog_end   = 250,
+    }
+
     // UIs
     state.debug_ui = init_debug_ui();
 }
@@ -116,15 +124,6 @@ frame :: proc "c" () {
     context = runtime.default_context()
     using shaders
     t := f32(sapp.frame_duration())
-
-    if .Action in state.keys {
-        state.vx = 1
-    } else {
-        state.vx = 0
-    }
-
-    state.rx += state.vx * t
-    state.ry += state.vy * t
 
     state.camera.aspect = sapp.widthf() / sapp.heightf()
     update_camera(&state.camera)
@@ -141,7 +140,8 @@ frame :: proc "c" () {
     sdtx.origin(0.0, 2.0)
     sdtx.color3f(1.0, 0.0, 1.0)
     sdtx.font(FONT_CPC)
-    sdtx.printf("FPS %.1f %.1f \n", fps, t)
+    sdtx.printf("(%.1f, %.1f, %.1f) -  FPS %.1f %.1f \n",
+                state.camera.front.x, state.camera.front.y, state.camera.front.z, fps, t)
 
     view_proj := get_view_proj(&state.camera)
 
@@ -156,8 +156,9 @@ frame :: proc "c" () {
     })
 
     // SKY & stars (this doesnt write to the depth buffer, so we draw it first)
+    update_sun(&state.stars, state.sky.state)
     draw_sky(&state.sky, &state.camera, t)
-    draw_stars(&state.stars, &state.camera, t)
+    draw_stars(&state.stars, &state.camera, state.sky.state.time_of_day)
 
     // Terrain
     draw_terrain(&state.terrain, &state.camera)
@@ -174,19 +175,17 @@ frame :: proc "c" () {
 
 
     // pass 2: Displaying and scaling render texture
-
     sg.begin_pass({ action = state.display.pass, swapchain = sglue.swapchain() })
 
     sg.apply_pipeline(state.display.pip)
     sg.apply_bindings(state.display.bind)
 
-    flag: f32 = 0.0
-    if .Up in state.keys do flag = 1.0
-
     display_fs_params := Display_Fs_Params {
         resolution     = { sapp.widthf(), sapp.heightf(),  },
         inv_resolution = { 1.0 /sapp.widthf(), 1.0/sapp.heightf(), },
         fog_color      = state.sky.state.now.horizon_color,
+        fog_start      = state.world.fog_start,
+        fog_end        = state.world.fog_end,
     }
     sg.apply_uniforms(UB_display_fs_params, { ptr = &display_fs_params, size = size_of(display_fs_params) })
 
@@ -224,6 +223,8 @@ event :: proc "c" (e: ^sapp.Event) {
 
             if e.key_code == .TAB {
                 state.debug_ui.active = !state.debug_ui.active
+            }if e.key_code == .P {
+                add_star(&state.stars, &state.camera, state.keys)
             }
         }
 
@@ -237,17 +238,6 @@ event :: proc "c" (e: ^sapp.Event) {
         sapp.lock_mouse(true)
         handle_camera_input(&state.camera, e)
     }
-}
-
-// used for positioning the cube. delete soon
-compute_mvp :: proc (rx, ry: f32) -> [16]f32 {
-    h         := get_terrain_height(&state.terrain, 0, 0) + 4.0
-    model     := glsl.mat4Translate({0, h, 0})
-    model      = model * glsl.mat4Rotate({1, 0, 0}, rx)
-    model      = model * glsl.mat4Rotate({0, 1, 0}, ry)
-    view_proj := get_view_proj(&state.camera)
-    mvp       := view_proj * model
-    return transmute([16]f32)mvp
 }
 
 

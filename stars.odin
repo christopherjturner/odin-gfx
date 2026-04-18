@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:math"
+import "core:math/rand"
 import "core:math/linalg/glsl"
 
 import img "vendor:stb/image"
@@ -9,20 +10,14 @@ import sg "./sokol/gfx"
 
 import "./shaders"
 
-MAX_STARS :: 9
+MAX_STARS :: 255
 
-Star :: struct {
-    lat: f32,
-    lon: f32,
-    size: f32,
-    intensity: f32, // 0.0 - 1.0
-}
 
 Star_Renderer :: struct {
-    pip:   sg.Pipeline,
-    bind:  sg.Bindings,
-    stars: [MAX_STARS]Star,
+    pip:       sg.Pipeline,
+    bind:      sg.Bindings,
     instances: [MAX_STARS]Billboard_Instance,
+    active:    int,
 }
 
 star_instance_buffer_desc := sg.Buffer_Desc{
@@ -40,11 +35,10 @@ init_stars :: proc() -> Star_Renderer {
     stars: Star_Renderer
 
     // load star texture(s)
-
     t_width, t_height, t_chan: i32
-    pixels := img.load("./assets/textures/star1.png", &t_width, &t_height, &t_chan, 4)
+    pixels := img.load("./assets/textures/star2.png", &t_width, &t_height, &t_chan, 4)
     if pixels == nil {
-        panic("image failed to load")
+        panic("image failed to load stars1.png")
     }
     defer img.image_free(pixels)
 
@@ -90,34 +84,18 @@ init_stars :: proc() -> Star_Renderer {
         },
         depth = {
             write_enabled = false,
-            compare       = .LESS_EQUAL, // TODO: what should this be?
+            compare       = .LESS_EQUAL,
         },
     })
 
-    stars.stars = {
-        { 120.0, 45.0, 1.0, 5.0 },
-        { 125.0, 40.0, 1.0, 4.0 },
-        { 135.0, 38.0, 1.1, 3.0 },
-        { 140.0, 42.0, 1.0, 2.0 },
-        { 150.0, 48.0, 0.8, 1.0 },
-        { 160.0, 52.0, 0.6, 0.5 },
-        { 170.0, 305.0, 1.3, 0.25 },
-        { 170.0, 205.0, 1.3, 0.25 },
-        { 40.0,  15.0, 1.0, 0.25 },
+    stars.instances[0] = Billboard_Instance {
+        {
+            0,0,0,
+        },
+        30,
+        { 1, 1, 1, 1 }
     }
-
-    for star, i in stars.stars {
-        theta := math.to_radians(star.lon)
-        phi   := math.to_radians(star.lat)
-        stars.instances[i] = {
-            {
-                math.cos(phi) * math.cos(theta),
-                math.sin(phi),
-                math.cos(phi) * math.sin(theta),
-            },
-            star.size
-        }
-    }
+    stars.active = 1
 
     stars.pip = sg.make_pipeline({
         shader = sg.make_shader(stars_shader_desc(sg.query_backend())),
@@ -131,6 +109,7 @@ init_stars :: proc() -> Star_Renderer {
                 ATTR_stars_uv         = { buffer_index = 0, format = .FLOAT2 },
                 ATTR_stars_inst_pos   = { buffer_index = 1, format = .FLOAT3 },
                 ATTR_stars_inst_scale = { buffer_index = 1, format = .FLOAT  },
+                ATTR_stars_inst_color = { buffer_index = 1, format = .FLOAT4 },
             },
         },
         colors = {
@@ -153,15 +132,35 @@ init_stars :: proc() -> Star_Renderer {
     return stars
 }
 
-draw_stars :: proc(stars : ^Star_Renderer, cam: ^Camera, t: f32) {
+update_sun :: proc(stars: ^Star_Renderer, sky: Sky_State) {
+    angle := (sky.time_of_day - 0.25) * 2.0 * math.PI
+    stars.instances[0].pos = { math.cos(angle), math.sin(angle), 0.1 }
+    stars.instances[0].color = sky.now.sun_color
+}
+
+add_star :: proc(stars: ^Star_Renderer, cam: ^Camera, input: Actions) {
+    stars.instances[stars.active].pos = cam.front
+    stars.instances[stars.active].scale = rand.float32_range(1.0, 4.0)
+    col := rand.float32_range(0.3, 1.0)
+    stars.instances[stars.active].color = { col, col, col, 0.6 }
+
+    stars.active += 1
+    fmt.printf("Adding star %v\n", stars.instances[stars.active].pos)
+    fmt.printf("Active stars: %d\n", stars.active)
+    for i := 0; i < stars.active; i+=1 {
+        fmt.printf("Star %v\n", stars.instances[i])
+    }
+}
+
+draw_stars :: proc(stars : ^Star_Renderer, cam: ^Camera, time_of_day: f32) {
     using shaders
 
     proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 10000.0)
     view := glsl.mat4LookAt(cam.position, cam.position + cam.front, cam.up)
 
     vs_uniforms := Star_Params {
-        view       = transmute([16]f32)view,
-        proj       = transmute([16]f32)proj,
+        view = transmute([16]f32)view,
+        proj = transmute([16]f32)proj,
     }
 
     sg.apply_pipeline(stars.pip)
@@ -175,5 +174,5 @@ draw_stars :: proc(stars : ^Star_Renderer, cam: ^Camera, t: f32) {
 
     sg.apply_pipeline(stars.pip)
     sg.apply_bindings(stars.bind)
-    sg.draw(0, 6, len(stars.instances))
+    sg.draw(0, 6, stars.active)
 }
