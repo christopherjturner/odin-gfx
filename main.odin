@@ -43,8 +43,11 @@ state: struct {
         count: i32,
     },
     world: struct {
-        fog_start: f32,
-        fog_end: f32,
+        game_time:       f32,
+        time_of_day:     f32,
+        time_multiplier: f32,
+        fog_start:       f32,
+        fog_end:         f32,
     },
     meshes:     Mesh_Renderer,
     sky:        Sky_Renderer,
@@ -108,8 +111,9 @@ init :: proc "c" () {
     init_display_renderer(offscreen_img, offscreen_depth_img)
 
     state.world = {
-        fog_start = 50,
-        fog_end   = 250,
+        time_multiplier = 1.0,
+        fog_start       = 50,
+        fog_end         = 250,
     }
 
     // UIs
@@ -158,7 +162,7 @@ frame :: proc "c" () {
     // SKY & stars (this doesnt write to the depth buffer, so we draw it first)
     update_sun(&state.stars, state.sky.state)
     draw_sky(&state.sky, &state.camera, t)
-    draw_stars(&state.stars, &state.camera, state.sky.state.time_of_day)
+    draw_stars(&state.stars, &state.camera, state.world.time_of_day)
 
     // Terrain
     draw_terrain(&state.terrain, &state.camera)

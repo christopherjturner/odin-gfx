@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import "core:math"
 import "core:math/linalg/glsl"
+import img "vendor:stb/image"
 import sg "./sokol/gfx"
 import "./shaders"
 
@@ -19,11 +20,8 @@ Sky_Renderer :: struct {
 }
 
 Sky_State :: struct {
-    time_of_day: f32, // 0.0 - 1.0
-    game_time:   f32,
     sun_dir:     [3]f32,
-    game_time_offset: f32,
-    now:  Sky_Color,
+    now:         Sky_Color,
 }
 
 // TODO: mix in sun color, maybe we can use the moon as well?
@@ -44,7 +42,7 @@ init_sky :: proc() -> Sky_Renderer {
     using shaders
     sky: Sky_Renderer
 
-    sky.state.time_of_day = 0.5
+    state.world.time_of_day = 0.5
 
     // Generate dome
     sky.verts, sky.indices = generate_sky_dome(8, 16)
@@ -57,6 +55,39 @@ init_sky :: proc() -> Sky_Renderer {
     sky.bind.index_buffer = sg.make_buffer({
         usage = { index_buffer = true },
         data  = { ptr = &sky.indices[0], size = len(sky.indices) * size_of(u16) },
+    })
+
+    // Load noise texture
+        // Load the texture map
+    t_img_w, t_img_h, t_img_chan: i32
+    t_img := img.load("./assets/textures/noise2.png", &t_img_w, &t_img_h, &t_img_chan, 4)
+    if t_img == nil {
+        panic("grass texture failed to load")
+    }
+    defer img.image_free(t_img)
+
+    t_img_desc := sg.Image_Desc {
+        width        = t_img_w,
+        height       = t_img_h,
+        pixel_format = .RGBA8,
+    }
+
+    t_img_desc.data.mip_levels[0] = {
+        ptr  = t_img,
+        size = uint(t_img_w * t_img_h * 4),
+    }
+
+    sky.bind.views[shaders.VIEW_sky_tex] = sg.make_view({
+        texture = {
+            image = sg.make_image(t_img_desc)
+        }
+    })
+
+    sky.bind.samplers[shaders.SMP_sky_smp] = sg.make_sampler({
+        min_filter = .LINEAR,
+        mag_filter = .LINEAR,
+        wrap_u     = .REPEAT,
+        wrap_v     = .REPEAT,
     })
 
     // Set up the sky shader pipeline
@@ -84,15 +115,15 @@ draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
     using shaders
 
     // TODO: work out how much to divide game time into a day/night
-    sky.state.game_time += t;
+    state.world.game_time += (t * state.world.time_multiplier);
 
     if !state.debug_ui.active {
-        sky.state.time_of_day = glsl.mod(0.5 + (sky.state.game_time * 0.01), 1.0);
+        state.world.time_of_day = glsl.mod(0.5 + (state.world.game_time * 0.01), 1.0);
     }
 
-    p1, p2, pt := find_keyframe_indices(&sky_palette, sky.state.time_of_day)
+    p1, p2, pt := find_keyframe_indices(&sky_palette, state.world.time_of_day)
     sky.state.now = interpolate_keyframes(sky_palette.keyframes[p1], sky_palette.keyframes[p2], pt)
-    sky.state.sun_dir = update_sun_direction(sky.state.time_of_day)
+    sky.state.sun_dir = update_sun_direction(state.world.time_of_day)
 
     proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 10000.0)
     view := glsl.mat4LookAt(cam.position, cam.position + cam.front, cam.up)
@@ -100,7 +131,7 @@ draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
     vs_uniforms := Sky_Vs_Params{
         view       = transmute([16]f32)view,
         proj       = transmute([16]f32)proj,
-        game_time  = sky.state.game_time,
+        game_time  = state.world.game_time,
     }
 
     fs_uniforms := Sky_Fs_Params{
@@ -109,7 +140,8 @@ draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
         sun_color   = sky.state.now.sun_color,
         sun_dir     = sky.state.sun_dir,
         view_dir    = glsl.normalize(cam.front),
-        game_time   = sky.state.game_time,
+        game_time   = state.world.game_time,
+        time_of_day = state.world.time_of_day,
     }
 
     sg.apply_pipeline(sky.pip)

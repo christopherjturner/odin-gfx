@@ -19,6 +19,7 @@ layout(binding=0) uniform sky_vs_params {
 
 in vec3 pos;
 out vec3 dir;
+out vec3 v_pos;
 
 vec3 rotate_axis(vec3 v, vec3 axis, float a) {
   axis = normalize(axis);
@@ -28,20 +29,21 @@ vec3 rotate_axis(vec3 v, vec3 axis, float a) {
 }
 
 void main() {
-  const float scale = 500.0;
+  v_pos = pos;
+  const float scale = 1000.0;
 
   vec3 scaled_pos = pos * scale;
   dir = normalize(scaled_pos);
 
   // Apply Earth's axial tilt (23.4 degrees)
-  const float tilt = radians(23.4);
+  const float tilt = radians(0);
 
   vec3 pole = normalize(vec3(sin(tilt), cos(tilt), 0.0));
-  dir = rotate_axis(dir, pole, game_time * 0.001);
+  //dir = rotate_axis(dir, pole, game_time * 0.001);
 
   // Lock view position to camera (skybox effect)
   mat4 v = view;
-  v[3] = vec4(0.0, -scale * 0.25, 0.0, 1.0);
+  v[3] = vec4(0.0, 0.0, 0.0, 1.0);
 
   gl_Position = proj * v * vec4(scaled_pos, 1.0);
 }
@@ -52,7 +54,12 @@ void main() {
 //-----------------------
 @fs fs
 in vec3 dir;
+in vec3 v_pos;
 out vec4 frag_color;
+
+layout(binding=0) uniform texture2D sky_tex;
+layout(binding=0) uniform sampler sky_smp;
+
 
 layout(binding=1) uniform sky_fs_params {
   vec4 horizon_now;
@@ -61,93 +68,87 @@ layout(binding=1) uniform sky_fs_params {
   vec3 sun_dir;
   vec3 view_dir;
   float game_time;
+  float time_of_day;
 };
 
 float saturate(float x) {
   return clamp(x, 0.0, 1.0);
 }
 
-float hash(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 34.345);
-  return fract(p.x * p.y);
+
+vec2 sky_uv(vec3 dir, float scale, vec2 scroll) {
+  vec2 uv = dir.xz / (dir.y + 0.01);
+  return uv * scale + scroll;
 }
 
-vec3 stars(vec3 dir, float threshold, float grid, float t) {
-  float star_mask = pow(saturate(dir.y), 4.0);
 
-  // Project onto dome
-  vec2 star_p = dir.xz / max(0.001, dir.y + 1.2);
-
-  float h = hash(floor(star_p * grid));
-  float star = saturate((h - threshold) / (1.0 - threshold));
-  star = pow(star, 10.0);
-
-  // Twinkle effect
-  float twinkle = 0.5 + 0.15 * sin((t * 5) * dir.x * dir.y);
-
-  return vec3(star * star_mask * twinkle);
+vec4 sample_cloud_layer(vec3 dir, float scale, vec2 speed) {
+    vec2 scroll = game_time * speed;
+    vec2 uv     = sky_uv(dir, scale, scroll);
+    return texture(sampler2D(sky_tex, sky_smp), uv);
 }
 
-vec4 drawSun(vec4 sky_color) {
 
-  float sun_height = max(sun_dir.y, 0.0);
-  float expansion = 1.0 + (1.0 - sun_height) * (30 * sun_height); // Simple linear boost
-  float base_radius = 0.9999;
-  float dynamic_radius = 1.0 - ((1.0 - base_radius) * expansion);
+vec3 apply_clouds(vec3 sky_color, vec3 dir) {
+    float fade = clamp(dir.y * 0.5, 0.0, 1.0);
 
-  float sun_dot = dot(normalize(dir), sun_dir);
-  float sun_mask = smoothstep(dynamic_radius, dynamic_radius + 0.0002, sun_dot);
-  return mix(sky_color, sun_color * 1.2, sun_mask);
+    // Upper layer — opaque base, slower, larger scale
+    vec4 upper = sample_cloud_layer(dir, 0.7 * fade, vec2(0.008, 0.002));
+
+    // Lower layer — transparent wisps, faster, tighter scale
+    vec4 lower = sample_cloud_layer(dir, 0.9, vec2(0.020, 0.06));
+
+    // Threshold both into cloud masks
+    //float upper_mask = smoothstep(0.25, 0.85, upper.r) * fade;
+    float upper_mask = smoothstep(0.65, 0.85, upper.r) * fade;
+    float lower_mask = smoothstep(0.10, 0.65, lower.r) * fade * 0.6;
+
+    // Cloud colour — white lit top, grey shadowed base
+    // Tint warm near the sun for sunrise/sunset
+    float sun_angle  = clamp(dot(dir, sun_dir), 0.0, 1.0);
+
+    vec3 cloud_light  = mix(horizon_now.rgb, sun_color.rgb, 0.7);
+    vec3 cloud_shadow = mix(horizon_now.rgb * 0.4, sun_color.rgb, 0.4);
+
+    vec3 cloud_color = mix(cloud_shadow, cloud_light, upper_mask);
+
+    // Composite: upper first (opaque-ish), lower on top (transparent wisps)
+    sky_color = mix(sky_color, cloud_color, upper_mask * 0.95) ;
+    //sky_color = mix(sky_color, cloud_light, lower_mask * 0.65);
+
+    return sky_color;
 }
-
-vec4 moon(vec4 sky_color) {
-  float moon_dot = dot(normalize(dir), -sun_dir);
-  float dist_to_moon = acos(moon_dot);
-  float moon_mask = smoothstep(0.02, 0.018, dist_to_moon);
-  vec3 moon_color = vec3(0.75, 0.72, 0.711);
-  moon_color = mix(sky_color.rgb, moon_color, moon_mask);
-  return vec4(moon_color, 1.0);
-}
-
-const vec3 total_rayleigh = vec3(5.8e-6, 13.5e-6, 33.1e-6);
-
-vec4 sun(vec4 sky_color) {
-  float cos_theta = dot(view_dir, sun_dir);
-  float zenith_angle = max(0.0, view_dir.y);
-
-  // 1. Rayleigh Phase Function
-  // This creates the general sky gradient
-  float rayleigh_phase = 0.75 * (1.0 + cos_theta * cos_theta);
-  vec3 rayleigh_color = total_rayleigh * rayleigh_phase;
-
-  // 2. Mie Phase Function (The Sun Glow)
-  // g = 0.76 to 0.99 (controls how "tight" the halo is)
-  float g = 0.8;
-  float mie_phase = (1.5 * (1.0 - g*g) * (1.0 + cos_theta*cos_theta)) /
-                      ((2.0 + g*g) * pow(1.0 + g*g - 2.0*g*cos_theta, 1.5));
-
-  // 3. Extinction (How much light is lost through the atmosphere)
-  // As the sun gets lower, light travels through more "air"
-  float sun_height = sun_dir.y;
-  vec3 extinction = exp(-total_rayleigh * (1.0 / (zenith_angle + 0.1)));
-
-  // Final Composition
-  vec3 final_sky = (rayleigh_color + mie_phase) * extinction;
-  return vec4(final_sky, 1.0);
-}
-
 
 void main() {
   // Gradient from horizon to zenith
-  float blend = dir.y * dir.y;
+  //float blend = dir.y * dir.y;
+  float blend = dir.y;
   vec4 sky_color = mix(horizon_now, zenith_now, blend);
 
+  vec3 clouds = apply_clouds(sky_color.rgb, dir);
+
+  sky_color.rgb = clouds;
+
+  /*
+  vec2 uv = dir.xz /  (dir.y +0.01);
+  float horizon_fade = clamp(dir.y + 5.0, 0.0, 1.0);
+
+  float clouds = cloud_density(uv, game_time) * horizon_fade;
+
+  vec3 cloud_color = mix(vec3(0.85, 0.88, 0.95),
+                         vec3(1.0, 1.0, 1.0),
+                         clouds);
+
+  float sun_influence = max(0.0, dot(dir, sun_dir));
+  cloud_color = mix(cloud_color, sun_color.rgb, sun_influence * 0.4 * (1.0 - game_time));
+
   // Add stars
-  //sky_color += vec4(stars(dir, 0.995, 1600.0, game_time) * 0.5, 1.0);
+  //sky_color += vec4(stars(v_pos, 0.15, 1000.0, game_time) * 0.5, 1.0);
 
   // Add sun
   //sky_color = moon(drawSun(sky_color));
+  //sky_color.rgb = mix(sky_color.rgb, cloud_color, clouds * 0.9);
+  */
 
   frag_color = sky_color;
 }

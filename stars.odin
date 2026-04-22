@@ -133,7 +133,7 @@ init_stars :: proc() -> Star_Renderer {
 }
 
 update_sun :: proc(stars: ^Star_Renderer, sky: Sky_State) {
-    angle := (sky.time_of_day - 0.25) * 2.0 * math.PI
+    angle := (state.world.time_of_day - 0.25) * 2.0 * math.PI
     stars.instances[0].pos = { math.cos(angle), math.sin(angle), 0.1 }
     stars.instances[0].color = sky.now.sun_color
 }

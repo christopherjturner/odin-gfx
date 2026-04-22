@@ -145,12 +145,12 @@ layout_debug_ui :: proc(ctx: ^mu.Context) {
 
 
         mu.layout_row(ctx, {100, 100, -1})
-        mu.label(ctx, fmt.tprintf("game time %.1f", state.sky.state.game_time))
-        mu.label(ctx, fmt.tprintf("time_of_day %.1f", state.sky.state.time_of_day))
+        mu.label(ctx, fmt.tprintf("game time %.1f", state.world.game_time))
+        mu.label(ctx, fmt.tprintf("time_of_day %.1f", state.world.time_of_day))
 
         mu.layout_row(ctx, {100, -1})
-        mu.label(ctx, "time of day")
-        f32_slider(ctx, &state.sky.state.time_of_day, 0.0, 1.0)
+        mu.label(ctx, "time multi")
+        f32_slider(ctx, &state.world.time_multiplier, 0.0, 10.0)
 
         mu.layout_row(ctx, {100, -1})
         mu.label(ctx, "fog start")
