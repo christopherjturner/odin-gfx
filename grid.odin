@@ -9,7 +9,6 @@ Grid_Vertex :: struct {
 }
 
 init_grid :: proc() {
-    using shaders
     grid_verts, grid_count := create_grid()
     state.grid.count = grid_count
     state.grid.bind.vertex_buffers[0] = grid_verts
@@ -30,15 +29,13 @@ init_grid :: proc() {
 }
 
 draw_grid :: proc(cam: ^Camera) {
-    using shaders
-
     sg.apply_pipeline(state.grid.pip)
     sg.apply_bindings(state.grid.bind)
-    grid_vs: Vs_Params
+    grid_vs: shaders.Vs_Params
 
     view_proj := get_view_proj(cam)
     grid_vs.mvp = transmute([16]f32)view_proj // Grid doesn't move/rotate
-    sg.apply_uniforms(UB_grid_vs_params, { ptr = &grid_vs, size = size_of(grid_vs) })
+    sg.apply_uniforms(shaders.UB_grid_vs_params, { ptr = &grid_vs, size = size_of(grid_vs) })
     sg.draw(0, state.grid.count, 1)
 }
 

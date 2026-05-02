@@ -38,27 +38,11 @@ init_terrain :: proc() -> Terrain_Renderer {
 
 
     // Load the texture map
-    t_img_w, t_img_h, t_img_chan: i32
-    t_img := img.load("./assets/grass.png", &t_img_w, &t_img_h, &t_img_chan, 4)
-    if t_img == nil {
-        panic("grass texture failed to load")
-    }
-    defer img.image_free(t_img)
-
-    t_img_desc := sg.Image_Desc {
-        width = t_img_w,
-        height = t_img_h,
-        pixel_format = .RGBA8,
-    }
-
-    t_img_desc.data.mip_levels[0] = {
-        ptr  = t_img,
-        size = uint(t_img_w * t_img_h * 4),
-    }
+    grass_texture := load_texture("./assets/grass.png")
 
     terrain.bind.views[shaders.VIEW_trtex] = sg.make_view({
         texture = {
-            image = sg.make_image(t_img_desc)
+            image = grass_texture
         }
     })
 

@@ -20,9 +20,11 @@ in vec2 uv;
 in vec3 inst_pos;
 in float inst_scale;
 in vec4 inst_color;
+in float inst_layer;
 
 out vec4 color;
 out vec2 texcoord;
+out float layer;
 
 void main() {
   // zero position
@@ -45,6 +47,7 @@ void main() {
     gl_Position   = proj * v * vec4(world_pos, 1.0);
     //gl_Position.z = gl_Position.w;
     texcoord = uv;
+    layer    = inst_layer;
     color    = inst_color;
 }
 @end
@@ -54,15 +57,17 @@ void main() {
 // Fragment Shader
 //-----------------------//
 @fs fs
-layout(binding=0) uniform texture2D startex;
+layout(binding=0) uniform texture2DArray startex;
 layout(binding=0) uniform sampler starsmp;
 
 in vec4 color;
 in vec2 texcoord;
+in float layer;
+
 out vec4 frag_color;
 
 void main() {
-  vec4 tex_color = texture(sampler2D(startex, starsmp), -texcoord);
+  vec4 tex_color = texture(sampler2DArray(startex, starsmp), vec3(texcoord, layer));
   frag_color = tex_color * color;
 }
 @end

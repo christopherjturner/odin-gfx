@@ -22,6 +22,11 @@ Sky_Renderer :: struct {
 Sky_State :: struct {
     sun_dir:     [3]f32,
     now:         Sky_Color,
+    cloud:       struct {
+        scale: [2]f32,
+        blend: [2]f32,
+        mask:  [4]f32,
+    }
 }
 
 // TODO: mix in sun color, maybe we can use the moon as well?
@@ -39,10 +44,14 @@ Sky_Palette :: struct {
 }
 
 init_sky :: proc() -> Sky_Renderer {
-    using shaders
+
     sky: Sky_Renderer
 
-    state.world.time_of_day = 0.5
+    sky.state.cloud = {
+        scale = { 0.40, 0.90 },
+        blend = { 0.95, 0.65 },
+        mask  = { 0.25, 0.85, 0.10, 0.65 },
+    }
 
     // Generate dome
     sky.verts, sky.indices = generate_sky_dome(8, 16)
@@ -58,28 +67,11 @@ init_sky :: proc() -> Sky_Renderer {
     })
 
     // Load noise texture
-        // Load the texture map
-    t_img_w, t_img_h, t_img_chan: i32
-    t_img := img.load("./assets/textures/noise2.png", &t_img_w, &t_img_h, &t_img_chan, 4)
-    if t_img == nil {
-        panic("grass texture failed to load")
-    }
-    defer img.image_free(t_img)
-
-    t_img_desc := sg.Image_Desc {
-        width        = t_img_w,
-        height       = t_img_h,
-        pixel_format = .RGBA8,
-    }
-
-    t_img_desc.data.mip_levels[0] = {
-        ptr  = t_img,
-        size = uint(t_img_w * t_img_h * 4),
-    }
+    noise_texture := load_texture("./assets/textures/noise.png")
 
     sky.bind.views[shaders.VIEW_sky_tex] = sg.make_view({
         texture = {
-            image = sg.make_image(t_img_desc)
+            image = noise_texture
         }
     })
 
@@ -91,12 +83,12 @@ init_sky :: proc() -> Sky_Renderer {
     })
 
     // Set up the sky shader pipeline
-    using shaders;
-    sky_shader := sg.make_shader(sky_shader_desc(sg.query_backend()))
+
+    sky_shader := sg.make_shader(shaders.sky_shader_desc(sg.query_backend()))
     sky.pip = sg.make_pipeline({
         layout = {
             attrs = {
-                ATTR_sky_pos = {format = .FLOAT3},
+                shaders.ATTR_sky_pos = {format = .FLOAT3},
             },
         },
         depth = {
@@ -112,14 +104,6 @@ init_sky :: proc() -> Sky_Renderer {
 }
 
 draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
-    using shaders
-
-    // TODO: work out how much to divide game time into a day/night
-    state.world.game_time += (t * state.world.time_multiplier);
-
-    if !state.debug_ui.active {
-        state.world.time_of_day = glsl.mod(0.5 + (state.world.game_time * 0.01), 1.0);
-    }
 
     p1, p2, pt := find_keyframe_indices(&sky_palette, state.world.time_of_day)
     sky.state.now = interpolate_keyframes(sky_palette.keyframes[p1], sky_palette.keyframes[p2], pt)
@@ -128,13 +112,13 @@ draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
     proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 10000.0)
     view := glsl.mat4LookAt(cam.position, cam.position + cam.front, cam.up)
 
-    vs_uniforms := Sky_Vs_Params{
+    vs_uniforms := shaders.Sky_Vs_Params{
         view       = transmute([16]f32)view,
         proj       = transmute([16]f32)proj,
         game_time  = state.world.game_time,
     }
 
-    fs_uniforms := Sky_Fs_Params{
+    fs_uniforms := shaders.Sky_Fs_Params{
         horizon_now = sky.state.now.horizon_color,
         zenith_now  = sky.state.now.zenith_color,
         sun_color   = sky.state.now.sun_color,
@@ -142,12 +126,15 @@ draw_sky :: proc(sky: ^Sky_Renderer, cam: ^Camera, t: f32) {
         view_dir    = glsl.normalize(cam.front),
         game_time   = state.world.game_time,
         time_of_day = state.world.time_of_day,
+        cloud_scale = sky.state.cloud.scale,
+        cloud_blend = sky.state.cloud.blend,
+        cloud_mask  = sky.state.cloud.mask,
     }
 
     sg.apply_pipeline(sky.pip)
     sg.apply_bindings(sky.bind)
-    sg.apply_uniforms(UB_sky_vs_params, { ptr = &vs_uniforms, size = size_of(vs_uniforms) })
-    sg.apply_uniforms(UB_sky_fs_params, { ptr = &fs_uniforms, size = size_of(fs_uniforms) })
+    sg.apply_uniforms(shaders.UB_sky_vs_params, { ptr = &vs_uniforms, size = size_of(vs_uniforms) })
+    sg.apply_uniforms(shaders.UB_sky_fs_params, { ptr = &fs_uniforms, size = size_of(fs_uniforms) })
     sg.draw(0, i32(len(sky.indices)), 1)
 }
 

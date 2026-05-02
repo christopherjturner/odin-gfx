@@ -31,85 +31,52 @@ star_instance_buffer_desc := sg.Buffer_Desc{
 
 
 init_stars :: proc() -> Star_Renderer {
-    using shaders
     stars: Star_Renderer
 
     // load star texture(s)
-    t_width, t_height, t_chan: i32
-    pixels := img.load("./assets/textures/star2.png", &t_width, &t_height, &t_chan, 4)
-    if pixels == nil {
-        panic("image failed to load stars1.png")
-    }
-    defer img.image_free(pixels)
+    images := load_array_texture({
+        "./assets/textures/array/1star.png",
+        "./assets/textures/array/2star.png",
+        "./assets/textures/array/3star.png",
+    })
 
-    img_desc := sg.Image_Desc {
-        width = t_width,
-        height = t_height,
-        pixel_format = .RGBA8,
-    }
-
-    img_desc.data.mip_levels[0] = {
-        ptr  = pixels,
-        size = uint(t_width * t_height * 4),
-    }
-
-    stars.bind.views[VIEW_tex] = sg.make_view({
+    stars.bind.views[shaders.VIEW_tex] = sg.make_view({
         texture = {
-            image = sg.make_image(img_desc)
+            image  = images,
+            slices = { base = 0, count = 0 },
         }
     })
 
-    stars.bind.samplers[SMP_smp] = sg.make_sampler({})
+    stars.bind.samplers[shaders.SMP_smp] = sg.make_sampler({})
 
     // Reuse BB verts
     stars.bind.vertex_buffers[0] = sg.make_buffer({
-        data = { ptr = &billboard_quad, size = len(billboard_quad) * size_of(Billboard_Vertex) },
+        data = {
+            ptr = &billboard_quad,
+            size = len(billboard_quad) * size_of(Billboard_Vertex)
+        },
     })
 
     stars.bind.vertex_buffers[1] = sg.make_buffer(star_instance_buffer_desc)
 
-    stars.pip = sg.make_pipeline({
-        shader = sg.make_shader(stars_shader_desc(sg.query_backend())),
-        layout = {
-            buffers = {
-                0 = { stride = size_of(Billboard_Vertex), }, // Quad
-                1 = { stride = size_of(Billboard_Instance), step_func = .PER_INSTANCE },
-            },
-            attrs = {
-                ATTR_billboard_pos        = { buffer_index = 0, format = .FLOAT3 },
-                ATTR_billboard_uv         = { buffer_index = 0, format = .FLOAT2 },
-                ATTR_billboard_inst_pos   = { buffer_index = 1, format = .FLOAT3 },
-                ATTR_billboard_inst_scale = { buffer_index = 1, format = .FLOAT  },
-            },
-        },
-        depth = {
-            write_enabled = false,
-            compare       = .LESS_EQUAL,
-        },
-    })
-
-    stars.instances[0] = Billboard_Instance {
-        {
-            0,0,0,
-        },
-        30,
-        { 1, 1, 1, 1 }
-    }
+    stars.instances[0] = Billboard_Instance {{0,0,0,},30,{ 1, 1, 1, 1 },0,}
     stars.active = 1
 
     stars.pip = sg.make_pipeline({
-        shader = sg.make_shader(stars_shader_desc(sg.query_backend())),
+        shader = sg.make_shader(shaders.stars_shader_desc(sg.query_backend())),
         layout = {
             buffers = {
                 0 = { stride = size_of(Billboard_Vertex), }, // Quad
                 1 = { stride = size_of(Billboard_Instance), step_func = .PER_INSTANCE },
             },
             attrs = {
-                ATTR_stars_pos        = { buffer_index = 0, format = .FLOAT3 },
-                ATTR_stars_uv         = { buffer_index = 0, format = .FLOAT2 },
-                ATTR_stars_inst_pos   = { buffer_index = 1, format = .FLOAT3 },
-                ATTR_stars_inst_scale = { buffer_index = 1, format = .FLOAT  },
-                ATTR_stars_inst_color = { buffer_index = 1, format = .FLOAT4 },
+                shaders.ATTR_stars_pos        = { buffer_index = 0, format = .FLOAT3 },
+                shaders.ATTR_stars_uv         = { buffer_index = 0, format = .FLOAT2 },
+                shaders.ATTR_stars_inst_pos   = { buffer_index = 1, format = .FLOAT3 },
+                shaders.ATTR_stars_inst_scale = { buffer_index = 1, format = .FLOAT  },
+                shaders.ATTR_stars_inst_color = { buffer_index = 1, format = .FLOAT4 },
+                shaders.ATTR_stars_inst_layer = { buffer_index = 1, format = .FLOAT  },
+
             },
         },
         colors = {
@@ -143,29 +110,26 @@ add_star :: proc(stars: ^Star_Renderer, cam: ^Camera, input: Actions) {
     stars.instances[stars.active].scale = rand.float32_range(1.0, 4.0)
     col := rand.float32_range(0.3, 1.0)
     stars.instances[stars.active].color = { col, col, col, 0.6 }
+    stars.instances[stars.active].layer = 1
+
 
     stars.active += 1
     fmt.printf("Adding star %v\n", stars.instances[stars.active].pos)
-    fmt.printf("Active stars: %d\n", stars.active)
-    for i := 0; i < stars.active; i+=1 {
-        fmt.printf("Star %v\n", stars.instances[i])
-    }
 }
 
 draw_stars :: proc(stars : ^Star_Renderer, cam: ^Camera, time_of_day: f32) {
-    using shaders
 
     proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 10000.0)
     view := glsl.mat4LookAt(cam.position, cam.position + cam.front, cam.up)
 
-    vs_uniforms := Star_Params {
+    vs_uniforms := shaders.Star_Params {
         view = transmute([16]f32)view,
         proj = transmute([16]f32)proj,
     }
 
     sg.apply_pipeline(stars.pip)
     sg.apply_bindings(stars.bind)
-    sg.apply_uniforms(UB_star_params, { ptr = &vs_uniforms, size = size_of(vs_uniforms) })
+    sg.apply_uniforms(shaders.UB_star_params, { ptr = &vs_uniforms, size = size_of(vs_uniforms) })
 
     sg.update_buffer(stars.bind.vertex_buffers[1], {
         ptr  = &stars.instances[0], // TODO: be careful about the pointers if/when we switch to a slice

@@ -135,8 +135,10 @@ debug_ui_input :: proc "c" (ev: ^sapp.Event, debug_ui: ^Debug_UI) {
 }
 
 layout_debug_ui :: proc(ctx: ^mu.Context) {
-    if mu.window(ctx, "Style Window", {350, 250, 300, 240}) {
+    if mu.window(ctx, "Style Window", {350, 250, 600, 380}) {
         sw := i32(f32(mu.get_current_container(ctx).body.w) * 0.25)
+        hw := i32(f32(mu.get_current_container(ctx).body.w) * 0.5)
+        fw := i32(f32(mu.get_current_container(ctx).body.w))
 
         // heightmap checks
         mu.layout_row(ctx, {100, 100, -1})
@@ -151,6 +153,43 @@ layout_debug_ui :: proc(ctx: ^mu.Context) {
         mu.layout_row(ctx, {100, -1})
         mu.label(ctx, "time multi")
         f32_slider(ctx, &state.world.time_multiplier, 0.0, 10.0)
+
+        // Clouds
+        mu.layout_row(ctx, {fw, -1})
+        mu.label(ctx, fmt.tprintf("cloud scale %v, %v",
+                                  state.sky.state.cloud.scale[0],
+                                  state.sky.state.cloud.scale[1]))
+        mu.layout_row(ctx, {hw, hw, -1})
+        f32_slider(ctx, &state.sky.state.cloud.scale[0], 0.0, 1.0)
+        f32_slider(ctx, &state.sky.state.cloud.scale[1], 0.0, 1.0)
+        // blend
+        mu.layout_row(ctx, {fw, -1})
+        mu.label(ctx, fmt.tprintf("cloud blend %v, %v",
+                                  state.sky.state.cloud.blend[0],
+                                  state.sky.state.cloud.blend[1]))
+        mu.layout_row(ctx, {hw, hw, -1})
+        f32_slider(ctx, &state.sky.state.cloud.blend[0], 0.0, 1.0)
+        f32_slider(ctx, &state.sky.state.cloud.blend[1], 0.0, 1.0)
+
+        mu.layout_row(ctx, {fw, -1})
+        mu.label(ctx, fmt.tprintf("cloud mask [%.2f %.2f] [%.2f %.2f]",
+                                  state.sky.state.cloud.mask[0],
+                                  state.sky.state.cloud.mask[1],
+                                  state.sky.state.cloud.mask[2],
+                                  state.sky.state.cloud.mask[3],
+                                 ))
+        mu.layout_row(ctx, {hw, hw, -1})
+        f32_slider(ctx, &state.sky.state.cloud.mask[0], 0.0, 1.0)
+        f32_slider(ctx, &state.sky.state.cloud.mask[1], 0.0, 1.0)
+        mu.layout_row(ctx, {hw, hw, -1})
+        f32_slider(ctx, &state.sky.state.cloud.mask[2], 0.0, 1.0)
+        f32_slider(ctx, &state.sky.state.cloud.mask[3], 0.0, 1.0)
+
+        // Fog
+        mu.layout_row(ctx, {fw, -1})
+        mu.label(ctx, "fog start/end")
+        f32_slider(ctx, &state.world.fog_end, 0.0, 800.0)
+        mu.layout_row(ctx, {hw, hw, -1})
 
         mu.layout_row(ctx, {100, -1})
         mu.label(ctx, "fog start")

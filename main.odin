@@ -54,6 +54,7 @@ state: struct {
     stars:      Star_Renderer,
     billboards: Billboard_Renderer,
     terrain:    Terrain_Renderer,
+    game_ui:    ^Game_UI,
     camera:     Camera,
     keys:       Actions,
     debug_ui:   ^Debug_UI,
@@ -61,7 +62,6 @@ state: struct {
 
 init :: proc "c" () {
     context = runtime.default_context()
-    using shaders
 
     sg.setup({
         environment = sglue.environment(),
@@ -117,7 +117,10 @@ init :: proc "c" () {
     }
 
     // UIs
+    state.game_ui  = init_game_ui();
     state.debug_ui = init_debug_ui();
+
+
 }
 
 
@@ -126,7 +129,7 @@ init :: proc "c" () {
 //------------//
 frame :: proc "c" () {
     context = runtime.default_context()
-    using shaders
+
     t := f32(sapp.frame_duration())
 
     state.camera.aspect = sapp.widthf() / sapp.heightf()
@@ -148,6 +151,13 @@ frame :: proc "c" () {
                 state.camera.front.x, state.camera.front.y, state.camera.front.z, fps, t)
 
     view_proj := get_view_proj(&state.camera)
+
+    // Increment time
+
+    if !state.debug_ui.active {
+        state.world.game_time += (t * state.world.time_multiplier);
+        state.world.time_of_day = glsl.mod(0.5 + (state.world.game_time * 0.01), 1.0);
+    }
 
     // Match the clear color to the sky
     sky_col := state.sky.state.now.horizon_color;
@@ -184,14 +194,14 @@ frame :: proc "c" () {
     sg.apply_pipeline(state.display.pip)
     sg.apply_bindings(state.display.bind)
 
-    display_fs_params := Display_Fs_Params {
+    display_fs_params := shaders.Display_Fs_Params {
         resolution     = { sapp.widthf(), sapp.heightf(),  },
         inv_resolution = { 1.0 /sapp.widthf(), 1.0/sapp.heightf(), },
         fog_color      = state.sky.state.now.horizon_color,
         fog_start      = state.world.fog_start,
         fog_end        = state.world.fog_end,
     }
-    sg.apply_uniforms(UB_display_fs_params, { ptr = &display_fs_params, size = size_of(display_fs_params) })
+    sg.apply_uniforms(shaders.UB_display_fs_params, { ptr = &display_fs_params, size = size_of(display_fs_params) })
 
     sg.draw(0,3,1)
     sdtx.draw()
@@ -199,6 +209,8 @@ frame :: proc "c" () {
     if state.debug_ui.active {
         draw_debug_ui(state.debug_ui)
     }
+
+    draw_game_ui(state.game_ui)
 
     sg.end_pass()
 
@@ -264,7 +276,7 @@ main :: proc() {
         width        = 800,
         height       = 600,
         sample_count = 4,
-        window_title = "texcube",
+        window_title = "podgin sim",
         icon         = { sokol_default = true },
         logger       = { func = slog.func },
         fullscreen   = true,
@@ -273,28 +285,6 @@ main :: proc() {
 
 
 init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
-    using shaders
-    // Offscreen Pipeline setup
-    state.offscreen.pip = sg.make_pipeline({
-        shader = sg.make_shader(texcube_shader_desc(sg.query_backend())),
-        layout = {
-            attrs = {
-                ATTR_texcube_pos       = { format = .FLOAT3 },
-                ATTR_texcube_color0    = { format = .UBYTE4N },
-                ATTR_texcube_texcoord0 = { format = .SHORT2N },
-            },
-        },
-        index_type   = .UINT16,
-        cull_mode    = .BACK,
-        sample_count = 1,
-        colors = {
-            0 = { pixel_format = .RGBA8 },
-        },
-        depth = {
-            compare       = .LESS_EQUAL,
-            write_enabled = true,
-        },
-    })
 
     // setup the color and depth-stencil-attachment images and views
     color_img := sg.make_image({
@@ -333,28 +323,28 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 }
 
 init_display_renderer :: proc(color_img: sg.Image, depth_img: sg.Image) {
-    using shaders
+
     state.display.pip = sg.make_pipeline({
-        shader    = sg.make_shader(display_shader_desc(sg.query_backend())),
+        shader    = sg.make_shader(shaders.display_shader_desc(sg.query_backend())),
         cull_mode = .NONE
     })
 
-    state.display.bind.views[VIEW_tex] = sg.make_view({
+    state.display.bind.views[shaders.VIEW_tex] = sg.make_view({
         texture = { image = color_img },
     })
 
-    state.display.bind.views[VIEW_depthTex] = sg.make_view({
+    state.display.bind.views[shaders.VIEW_depthTex] = sg.make_view({
         texture = { image = depth_img },
     })
 
-    state.display.bind.samplers[SMP_smp] = sg.make_sampler({
+    state.display.bind.samplers[shaders.SMP_smp] = sg.make_sampler({
         min_filter = .LINEAR, //NEAREST,
         mag_filter = .LINEAR,
         wrap_u     = .REPEAT,
         wrap_v     = .REPEAT,
     })
 
-    state.display.bind.samplers[SMP_depthSmp] = sg.make_sampler({
+    state.display.bind.samplers[shaders.SMP_depthSmp] = sg.make_sampler({
         min_filter = .NEAREST,
         mag_filter = .NEAREST,
         wrap_u     = .REPEAT,

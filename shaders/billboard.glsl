@@ -20,9 +20,11 @@ in vec2 uv;
 in vec3 inst_pos;
 in float inst_scale;
 in vec4 inst_color;
+in float inst_layer;
 
 out vec4 color;
 out vec2 texcoord;
+out float layer;
 
 void main() {
     // Get the camera's Right and Up vectors from the view matrix
@@ -37,6 +39,7 @@ void main() {
 
     gl_Position = view_proj * vec4(world_pos, 1.0);
     texcoord = uv;
+    layer = inst_layer;
     color = inst_color * ambient_color;
 }
 @end
@@ -46,15 +49,16 @@ void main() {
 // Fragment Shader
 //-----------------------//
 @fs fs
-layout(binding=0) uniform texture2D bbtex;
+layout(binding=0) uniform texture2DArray bbtex;
 layout(binding=0) uniform sampler bbsmp;
 
 in vec4 color;
 in vec2 texcoord;
+in float layer;
 out vec4 frag_color;
 
 void main() {
-  vec4 tex_color = texture(sampler2D(bbtex, bbsmp), -texcoord);
+  vec4 tex_color = texture(sampler2DArray(bbtex, bbsmp), vec3(-texcoord, layer));
   if (tex_color.a < 0.5) discard;
   frag_color = tex_color * color;
 }

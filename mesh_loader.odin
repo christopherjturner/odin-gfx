@@ -73,7 +73,7 @@ load_mesh :: proc(filename: cstring) -> (sg.Buffer, sg.Buffer, i32) {
         },
     })
 
-    fmt.printf("\n%d index data: %v\n", cast(i32)p.indices.count, p.indices.buffer_view.buffer.data)
+    //fmt.printf("\n%d index data: %v\n", cast(i32)p.indices.count, p.indices.buffer_view.buffer.data)
 
     index_count := cast(i32)p.indices.count
     unpacked_indices := make([]u16, index_count) // Or u32 if your models are large

@@ -2,10 +2,7 @@ package main
 
 import "core:fmt"
 import "core:math/linalg/glsl"
-import img "vendor:stb/image"
 import sg "./sokol/gfx"
-import sgl "./sokol/gl"
-
 import "./shaders"
 
 
@@ -51,29 +48,10 @@ init_meshes :: proc() -> Mesh_Renderer {
         },
     })
 
-    // Texture loader
-    // TODO: centralize texture loading since we're repeating this alot
-    t_width, t_height, t_chan: i32
-    pixels := img.load("./assets/textures/dovecote.png", &t_width, &t_height, &t_chan, 4)
-    if pixels == nil {
-        panic("image failed to load")
-    }
-    defer img.image_free(pixels)
-
-    img_desc := sg.Image_Desc {
-        width        = t_width,
-        height       = t_height,
-        pixel_format = .RGBA8,
-    }
-
-    img_desc.data.mip_levels[0] = {
-        ptr  = pixels,
-        size = uint(t_width * t_height * 4),
-    }
-
+    texture := load_texture("./assets/textures/dovecote.png")
     mesh_renderer.bind.views[shaders.VIEW_mesh_tex] = sg.make_view({
         texture = {
-            image = sg.make_image(img_desc)
+            image = texture
         }
     })
 

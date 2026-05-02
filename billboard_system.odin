@@ -2,7 +2,6 @@ package main
 
 import "core:fmt"
 import "core:math/linalg/glsl"
-import img "vendor:stb/image"
 import sg "./sokol/gfx"
 import "./shaders"
 
@@ -17,6 +16,7 @@ Billboard_Instance :: struct {
     pos:   [3]f32,
     scale: f32,
     color: [4]f32,
+    layer: f32,
 }
 
 Billboard_Renderer :: struct {
@@ -41,82 +41,72 @@ billboard_quad := [6]Billboard_Vertex{
 
 
 init_billboards :: proc() -> Billboard_Renderer {
-    using shaders
     billboard: Billboard_Renderer
 
-    // Load the billboard texture. This will be a texture array at some point.
-    t_width, t_height, t_chan: i32
+    images := load_array_texture({
+        "./assets/textures/tree1.png",
+        "./assets/textures/tree2.png",
+        "./assets/textures/tree3.png",
+    })
 
-    pixels := img.load("./assets/billboard.png", &t_width, &t_height, &t_chan, 4)
-    if pixels == nil {
-        panic("image failed to load")
-    }
-    defer img.image_free(pixels)
-    fmt.printf("texture: %d %d %d", t_width, t_height, t_chan)
 
-    img_desc := sg.Image_Desc {
-        width        = t_width,
-        height       = t_height,
-        pixel_format = .RGBA8,
-    }
-
-    img_desc.data.mip_levels[0] = {
-        ptr  = pixels,
-        size = uint(t_width * t_height * 4),
-    }
-
-    billboard.bind.views[VIEW_tex] = sg.make_view({
+    billboard.bind.views[shaders.VIEW_tex] = sg.make_view({
         texture = {
-            image = sg.make_image(img_desc)
+            image = images,
+            slices = { base = 0, count = 0 },
         }
     })
 
-    billboard.bind.samplers[SMP_smp] = sg.make_sampler({})
+    billboard.bind.samplers[shaders.SMP_smp] = sg.make_sampler({})
 
 
     // Bind quad and instance buffers
     billboard.bind.vertex_buffers[0] = sg.make_buffer({
-        data = { ptr = &billboard_quad, size = len(billboard_quad) * size_of(Billboard_Vertex) },
+        data = {
+            ptr = &billboard_quad,
+            size = len(billboard_quad) * size_of(Billboard_Vertex)
+        }
     })
     billboard.bind.vertex_buffers[1] = sg.make_buffer(instance_buffer_desc)
 
     // Setup the render pipeline with the billboard shader
 
     billboard.pip = sg.make_pipeline({
-        shader = sg.make_shader(billboard_shader_desc(sg.query_backend())),
+        shader = sg.make_shader(shaders.billboard_shader_desc(sg.query_backend())),
         layout = {
             buffers = {
                 0 = { stride = size_of(Billboard_Vertex), }, // Quad
                 1 = { stride = size_of(Billboard_Instance), step_func = .PER_INSTANCE },
             },
             attrs = {
-                ATTR_billboard_pos        = { buffer_index = 0, format = .FLOAT3 },
-                ATTR_billboard_uv         = { buffer_index = 0, format = .FLOAT2 },
-                ATTR_billboard_inst_pos   = { buffer_index = 1, format = .FLOAT3 },
-                ATTR_billboard_inst_scale = { buffer_index = 1, format = .FLOAT  },
-                ATTR_billboard_inst_color = { buffer_index = 1, format = .FLOAT4 },
-
+                shaders.ATTR_billboard_pos        = { buffer_index = 0, format = .FLOAT3 },
+                shaders.ATTR_billboard_uv         = { buffer_index = 0, format = .FLOAT2 },
+                shaders.ATTR_billboard_inst_pos   = { buffer_index = 1, format = .FLOAT3 },
+                shaders.ATTR_billboard_inst_scale = { buffer_index = 1, format = .FLOAT  },
+                shaders.ATTR_billboard_inst_color = { buffer_index = 1, format = .FLOAT4 },
+                shaders.ATTR_billboard_inst_layer = { buffer_index = 1, format = .FLOAT  },
             },
         },
         depth = {
             write_enabled = true,
-            compare = .LESS_EQUAL,
+            compare       = .LESS_EQUAL,
         },
     })
 
     billboard.instances = {
-        {{2, 0.5, 2}, 5.0, {1, 1, 1, 1}},
-        {{-1, 1, 1},  10.0, {1, 1, 1, 1}},
-        {{32, 2, 30}, 10.0, {1, 1, 1, 1}} }
+        {{4, 0.5, 4}, 5.0,  {1, 1, 1, 1}, 0},
+        {{-4, 1, -4}, 10.0, {1, 1, 1, 1}, 1},
+        {{32, 2, 30}, 10.0, {1, 1, 1, 1}, 2},
+    }
 
     return billboard
 }
 
 draw_billboards :: proc(bb: ^Billboard_Renderer, cam: ^Camera) {
-    using shaders
+
     vp := get_view_proj(cam)
-    uniforms := Billboard_Params{
-        view_proj = transmute([16]f32)vp,
+    uniforms := shaders.Billboard_Params{
+        view_proj     = transmute([16]f32)vp,
         ambient_color = state.sky.state.now.ambient_color,
     }
 
@@ -129,6 +119,6 @@ draw_billboards :: proc(bb: ^Billboard_Renderer, cam: ^Camera) {
 
     sg.apply_pipeline(bb.pip)
     sg.apply_bindings(bb.bind)
-    sg.apply_uniforms(UB_billboard_params, { ptr = &uniforms, size = size_of(uniforms) })
+    sg.apply_uniforms(shaders.UB_billboard_params, { ptr = &uniforms, size = size_of(uniforms) })
     sg.draw(0, 6, len(bb.instances))
 }

@@ -1,5 +1,6 @@
 #!/bin/bash
 
+odin check .
 
 echo display
 ../../sokol/sokol-tools-bin/bin/linux/sokol-shdc -i shaders/displayshader.glsl -o shaders/displayshader.odin -l glsl430 -f sokol_odin
@@ -17,5 +18,6 @@ echo mesh
 ../../sokol/sokol-tools-bin/bin/linux/sokol-shdc -i shaders/meshshader.glsl -o shaders/meshshader.odin -l glsl430 -f sokol_odin
 echo stars
 ../../sokol/sokol-tools-bin/bin/linux/sokol-shdc -i shaders/starshader.glsl -o shaders/starshader.odin -l glsl430 -f sokol_odin
+echo game ui
+../../sokol/sokol-tools-bin/bin/linux/sokol-shdc -i shaders/gameuishader.glsl -o shaders/gameuishader.odin -l glsl430 -f sokol_odin
 
-odin check .
