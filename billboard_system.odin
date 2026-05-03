@@ -22,7 +22,7 @@ Billboard_Instance :: struct {
 Billboard_Renderer :: struct {
     pip:  sg.Pipeline,
     bind: sg.Bindings,
-    instances: [3]Billboard_Instance
+    instances: [1]Billboard_Instance
 }
 
 instance_buffer_desc := sg.Buffer_Desc{
@@ -94,9 +94,7 @@ init_billboards :: proc() -> Billboard_Renderer {
     })
 
     billboard.instances = {
-        {{4, 0.5, 4}, 5.0,  {1, 1, 1, 1}, 0},
-        {{-4, 1, -4}, 10.0, {1, 1, 1, 1}, 1},
-        {{32, 2, 30}, 10.0, {1, 1, 1, 1}, 2},
+        {{4, 0.5, 4}, 5.0,  {1, 1, 1, 1}, 0}
     }
 
     return billboard

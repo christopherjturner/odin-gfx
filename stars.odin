@@ -105,7 +105,7 @@ update_sun :: proc(stars: ^Star_Renderer, sky: Sky_State) {
     stars.instances[0].color = sky.now.sun_color
 }
 
-add_star :: proc(stars: ^Star_Renderer, cam: ^Camera, input: Actions) {
+add_star :: proc(stars: ^Star_Renderer, cam: ^Camera) {
     stars.instances[stars.active].pos = cam.front
     stars.instances[stars.active].scale = rand.float32_range(1.0, 4.0)
     col := rand.float32_range(0.3, 1.0)

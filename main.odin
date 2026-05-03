@@ -56,8 +56,9 @@ state: struct {
     terrain:    Terrain_Renderer,
     game_ui:    ^Game_UI,
     camera:     Camera,
-    keys:       Actions,
     debug_ui:   ^Debug_UI,
+    player:     Player,
+    input:      InputState,
 }
 
 init :: proc "c" () {
@@ -80,8 +81,10 @@ init :: proc "c" () {
         logger = { func = slog.func },
     })
 
-    // sgl for ui
+    // sgl for debug ui
     sgl.setup({})
+
+    state.input.bindings = init_key_bindings()
 
     // init camera
     state.camera = init_camera(sapp.widthf() / sapp.heightf())
@@ -98,7 +101,16 @@ init :: proc "c" () {
 
     // @TODO: init the instances in the billboard system
     state.billboards.instances[0].pos.y = get_terrain_height(&state.terrain, state.billboards.instances[0].pos.x,state.billboards.instances[0].pos.z) + 1.0
-    state.billboards.instances[1].pos.y = get_terrain_height(&state.terrain, state.billboards.instances[1].pos.x,state.billboards.instances[1].pos.z) + 1.0
+    //state.billboards.instances[1].pos.y = get_terrain_height(&state.terrain, state.billboards.instances[1].pos.x,state.billboards.instances[1].pos.z) + 1.0
+
+    state.player = {
+        position = state.billboards.instances[0].pos,
+        forward  = {0,0,0},
+        yaw      = -90.0,
+        pitch    = 0.0,
+        speed    = 25.0,
+    }
+
 
     // Meshes
     state.meshes = init_meshes()
@@ -119,8 +131,6 @@ init :: proc "c" () {
     // UIs
     state.game_ui  = init_game_ui();
     state.debug_ui = init_debug_ui();
-
-
 }
 
 
@@ -132,13 +142,22 @@ frame :: proc "c" () {
 
     t := f32(sapp.frame_duration())
 
+    handle_global_actions()
+    update_player(&state.player, &state.input, t)
+
+    // TEMP: use billboard 0 as the player sprite
+    state.player.position.y = get_terrain_height(&state.terrain, state.player.position.x, state.player.position.z) + 1.0
+    state.billboards.instances[0].pos = state.player.position
+
     state.camera.aspect = sapp.widthf() / sapp.heightf()
-    update_camera(&state.camera)
-    update_camera_movement(&state.camera, state.keys, t)
+    //update_camera_movement(&state.camera, state.keys, t)
+    //update_camera(&state.camera)
+
+    update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 0)
 
     // TEMP: stick camera to the terrain
-    height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z) + 1.0
-    state.camera.position.y = height
+    //height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z)
+    //state.camera.position.y = glsl.max(height + 3.0, state.camera.position.y)
 
     // Get the current FPS
     fps := 1 / sapp.frame_duration()
@@ -150,10 +169,7 @@ frame :: proc "c" () {
     sdtx.printf("(%.1f, %.1f, %.1f) -  FPS %.1f %.1f \n",
                 state.camera.front.x, state.camera.front.y, state.camera.front.z, fps, t)
 
-    view_proj := get_view_proj(&state.camera)
-
     // Increment time
-
     if !state.debug_ui.active {
         state.world.game_time += (t * state.world.time_multiplier);
         state.world.time_of_day = glsl.mod(0.5 + (state.world.game_time * 0.01), 1.0);
@@ -210,11 +226,13 @@ frame :: proc "c" () {
         draw_debug_ui(state.debug_ui)
     }
 
-    draw_game_ui(state.game_ui)
+    //draw_game_ui(state.game_ui)
 
     sg.end_pass()
 
     sg.commit()
+
+    reset_input(&state.input)
 }
 
 //------------//
@@ -223,39 +241,17 @@ frame :: proc "c" () {
 event :: proc "c" (e: ^sapp.Event) {
     context = runtime.default_context()
 
-    if e.type == .KEY_DOWN || e.type == .KEY_UP {
-        if action, ok := get_action(e.key_code); ok {
-            if e.type == .KEY_DOWN {
-                state.keys += {action}
-            } else {
-                state.keys -= {action}
-            }
-        }
-
-        if e.type == .KEY_UP {
-            if e.key_code == .ESCAPE {
-                sapp.request_quit()
-            }
-
-            if e.key_code == .TAB {
-                state.debug_ui.active = !state.debug_ui.active
-            }if e.key_code == .P {
-                add_star(&state.stars, &state.camera, state.keys)
-            }
-        }
-
-    }
-
+    handle_input_event(e, &state.input)
+    // Pass input to debug UI if its open
     if state.debug_ui.active {
         sapp.lock_mouse(false)
         debug_ui_input(e, state.debug_ui)
         return
     } else {
         sapp.lock_mouse(true)
-        handle_camera_input(&state.camera, e)
     }
-}
 
+}
 
 cleanup :: proc "c" () {
     context = runtime.default_context()
@@ -283,6 +279,20 @@ main :: proc() {
     })
 }
 
+handle_global_actions :: proc() {
+
+    if action_released(&state.input, .Quit) {
+        sapp.request_quit()
+    }
+
+    if action_released(&state.input, .Debug) {
+        state.debug_ui.active = !state.debug_ui.active
+    }
+
+    if action_released(&state.input, .Edit) {
+        add_star(&state.stars, &state.camera)
+    }
+}
 
 init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 
