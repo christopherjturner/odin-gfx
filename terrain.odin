@@ -202,7 +202,6 @@ get_terrain_height :: proc(terrain: ^Terrain_Renderer, world_x, world_z: f32) ->
         return 10.0 // A "Kill Plane" depth
     }
 
-
     // 3. Find coordinates within the single quad (0.0 to 1.0)
     tx := gx - f32(ix)
     tz := gz - f32(iz)

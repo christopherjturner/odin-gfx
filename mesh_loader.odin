@@ -12,8 +12,15 @@ MeshVert :: struct {
     normal: [3]f32,
 }
 
-load_mesh :: proc(filename: cstring) -> (sg.Buffer, sg.Buffer, i32) {
+Mesh :: struct {
+    vertex_buffer: sg.Buffer,
+    index_buffer: sg.Buffer,
+    index_count: i32,
+}
+
+load_mesh :: proc(filename: cstring) -> ^Mesh {
     options: cgltf.options
+    mesh := new(Mesh)
 
     data, result := cgltf.parse_file(options, filename)
     if result != .success {
@@ -27,15 +34,24 @@ load_mesh :: proc(filename: cstring) -> (sg.Buffer, sg.Buffer, i32) {
         panic("failed to load buffers")
     }
 
-    fmt.printf("\n%s: mesh count %d\n", filename, len(data.meshes))
+    for j in data.skins[0].joints {
+        fmt.printf("%s: skel root children %v\n", filename, j)
+    }
+
+    fmt.printf("%s: mesh count %d\n", filename, len(data.meshes))
 
     for m in data.meshes {
         fmt.printf("\n%s: mesh\n", m.name)
     }
 
+    fmt.printf("\n%s: mesh 0 primatives count %d\n", filename, len(data.meshes[0].primitives))
+
+
     // load vert data
     p := data.meshes[0].primitives[0]
     count := cast(int)p.attributes[0].data.count
+    fmt.printf("\n%s: mesh 0 primative 0 attr count %d\n", filename, count)
+
     verts := make([]MeshVert, count)
     defer delete(verts)
 
@@ -43,7 +59,6 @@ load_mesh :: proc(filename: cstring) -> (sg.Buffer, sg.Buffer, i32) {
         v := &verts[i]
 
         for a in p.attributes {
-
             #partial switch a.type {
             case .position:
                 ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.pos[0], 3)
@@ -65,7 +80,7 @@ load_mesh :: proc(filename: cstring) -> (sg.Buffer, sg.Buffer, i32) {
         }
     }
 
-    vbuf := sg.make_buffer({
+    mesh.vertex_buffer = sg.make_buffer({
         usage = { vertex_buffer = true },
         data = {
             ptr = raw_data(verts),
@@ -84,7 +99,7 @@ load_mesh :: proc(filename: cstring) -> (sg.Buffer, sg.Buffer, i32) {
     }
 
     // load index buffer
-    ibuf := sg.make_buffer({
+    mesh.index_buffer = sg.make_buffer({
         usage = { index_buffer = true },
         data  = {
             ptr  = raw_data(unpacked_indices),
@@ -92,5 +107,7 @@ load_mesh :: proc(filename: cstring) -> (sg.Buffer, sg.Buffer, i32) {
         },
     })
 
-    return vbuf, ibuf, cast(i32)p.indices.count
+    mesh.index_count = index_count
+
+    return mesh
 }

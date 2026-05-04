@@ -143,17 +143,22 @@ frame :: proc "c" () {
     t := f32(sapp.frame_duration())
 
     handle_global_actions()
+
     update_player(&state.player, &state.input, t)
+    state.player.position.y = glsl.max(state.player.position.y, get_terrain_height(&state.terrain, state.player.position.x, state.player.position.z) + 10.0)
+
+    state.meshes.models[0].transform.pos = state.player.position
+    state.meshes.models[0].transform.rot = quat_from_pitch_yaw(glsl.radians(state.player.pitch), -glsl.radians(state.player.yaw))
+
+    //fmt.printf("quat: %v pitch %d yaw %d\n", state.player, state.player.pitch, state.player.yaw)
 
     // TEMP: use billboard 0 as the player sprite
-    state.player.position.y = get_terrain_height(&state.terrain, state.player.position.x, state.player.position.z) + 1.0
-    state.billboards.instances[0].pos = state.player.position
 
     state.camera.aspect = sapp.widthf() / sapp.heightf()
     //update_camera_movement(&state.camera, state.keys, t)
-    //update_camera(&state.camera)
+    //update_fps_camera(&state.camera, t)
 
-    update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 0)
+    update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 5)
 
     // TEMP: stick camera to the terrain
     //height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z)
@@ -167,7 +172,7 @@ frame :: proc "c" () {
     sdtx.color3f(1.0, 0.0, 1.0)
     sdtx.font(FONT_CPC)
     sdtx.printf("(%.1f, %.1f, %.1f) -  FPS %.1f %.1f \n",
-                state.camera.front.x, state.camera.front.y, state.camera.front.z, fps, t)
+                state.camera.position.x, state.camera.position.y, state.camera.position.z, fps, t)
 
     // Increment time
     if !state.debug_ui.active {
