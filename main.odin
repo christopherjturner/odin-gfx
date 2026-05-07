@@ -111,6 +111,7 @@ init :: proc "c" () {
         speed    = 25.0,
     }
 
+    fmt.println("billboards done")
 
     // Meshes
     state.meshes = init_meshes()
@@ -138,8 +139,10 @@ init :: proc "c" () {
 // Frame
 //------------//
 frame :: proc "c" () {
-    context = runtime.default_context()
 
+    context = runtime.default_context()
+    fmt.println("frame 1")
+    
     t := f32(sapp.frame_duration())
 
     handle_global_actions()
@@ -149,16 +152,12 @@ frame :: proc "c" () {
 
     state.meshes.models[0].transform.pos = state.player.position
     state.meshes.models[0].transform.rot = quat_from_pitch_yaw(glsl.radians(state.player.pitch), -glsl.radians(state.player.yaw))
-
-    //fmt.printf("quat: %v pitch %d yaw %d\n", state.player, state.player.pitch, state.player.yaw)
-
     // TEMP: use billboard 0 as the player sprite
 
     state.camera.aspect = sapp.widthf() / sapp.heightf()
-    //update_camera_movement(&state.camera, state.keys, t)
-    //update_fps_camera(&state.camera, t)
 
-    update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 5)
+    update_fps_camera(&state.camera, t)
+    //update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 5)
 
     // TEMP: stick camera to the terrain
     //height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z)
@@ -200,14 +199,14 @@ frame :: proc "c" () {
 
     // GRID
     //draw_grid(&state.camera)
-
-    draw_meshes(&state.meshes, &state.camera)
+    draw_meshes(&state.meshes, &state.camera, t)
 
     // Billboards
     draw_billboards(&state.billboards, &state.camera)
 
     sg.end_pass()
 
+    fmt.println("frame pass 2")
 
     // pass 2: Displaying and scaling render texture
     sg.begin_pass({ action = state.display.pass, swapchain = sglue.swapchain() })

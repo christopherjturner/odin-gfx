@@ -1,113 +1,269 @@
 package main
 
-import "vendor:cgltf"
 import "core:fmt"
+import "core:math/linalg"
+import "core:math/linalg/glsl"
+import "vendor:cgltf"
 
 import sg "./sokol/gfx"
 
 
 MeshVert :: struct {
-    pos: [3]f32,
-    uv:  [2]f32,
-    normal: [3]f32,
+	pos:     [3]f32,
+	uv:      [2]f32,
+	normal:  [3]f32,
+	joints:  [4]u32,
+	weights: [4]f32,
 }
 
 Mesh :: struct {
-    vertex_buffer: sg.Buffer,
-    index_buffer: sg.Buffer,
-    index_count: i32,
+	vertex_buffer: sg.Buffer,
+	index_buffer:  sg.Buffer,
+	index_count:   i32,
+	skeleton:      Skeleton,
+    animations:    []Animation,
 }
 
+Joint :: struct {
+	parent:       int,
+	inverse_bind: [16]f32,
+}
+
+Pose :: struct {
+	translation: [3]f32,
+	rotation:    [4]f32,
+	scale:       [3]f32,
+}
+
+Skeleton :: struct {
+	joints:    []Joint,
+	rest_pose: []Pose,
+}
+
+JointTrack :: struct {
+	translation_times:  []f32,
+	translation_values: [][3]f32,
+    translation_linear: bool,
+
+	rotation_times:     []f32,
+	rotation_values:    [][4]f32,
+    rotation_linear:    bool,
+
+    scale_times:        []f32,
+	scale_values:       [][3]f32,
+    scale_linear:       bool,
+}
+
+Animation :: struct {
+	duration: f32,
+	tracks:   []JointTrack,
+}
+
+
 load_mesh :: proc(filename: cstring) -> ^Mesh {
-    options: cgltf.options
-    mesh := new(Mesh)
+	options: cgltf.options
+	mesh := new(Mesh)
 
-    data, result := cgltf.parse_file(options, filename)
-    if result != .success {
-        panic("failed to load model")
+	data, result := cgltf.parse_file(options, filename)
+	if result != .success {
+		panic("failed to load model")
+	}
+
+	defer cgltf.free(data)
+
+	res := cgltf.load_buffers(options, data, filename)
+	if res != .success {
+		panic("failed to load buffers")
+	}
+
+    node_to_joint := make(map[^cgltf.node]int)
+    defer delete(node_to_joint) // Clean up the map's backing memory
+	for j, i in data.skins[0].joints {
+        node_to_joint[j] = i
     }
 
-    defer cgltf.free(data)
+	// Load joints/bones
+	mesh.skeleton.joints    = make([]Joint, len(data.skins[0].joints))
+    mesh.skeleton.rest_pose = make([]Pose,  len(data.skins[0].joints))
 
-    res := cgltf.load_buffers(options, data, filename)
-    if res != .success {
-        panic("failed to load buffers")
-    }
+	for j, i in data.skins[0].joints {
 
-    for j in data.skins[0].joints {
-        fmt.printf("%s: skel root children %v\n", filename, j)
-    }
+        // bind matrix
+		if !cgltf.accessor_read_float(
+			data.skins[0].inverse_bind_matrices,
+			uint(i),
+			&mesh.skeleton.joints[i].inverse_bind[0],
+			16,
+		) {
+			panic("failed to read inverse bind matrix")
+		}
 
-    fmt.printf("%s: mesh count %d\n", filename, len(data.meshes))
-
-    for m in data.meshes {
-        fmt.printf("\n%s: mesh\n", m.name)
-    }
-
-    fmt.printf("\n%s: mesh 0 primatives count %d\n", filename, len(data.meshes[0].primitives))
-
-
-    // load vert data
-    p := data.meshes[0].primitives[0]
-    count := cast(int)p.attributes[0].data.count
-    fmt.printf("\n%s: mesh 0 primative 0 attr count %d\n", filename, count)
-
-    verts := make([]MeshVert, count)
-    defer delete(verts)
-
-    for i in 0..<count {
-        v := &verts[i]
-
-        for a in p.attributes {
-            #partial switch a.type {
-            case .position:
-                ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.pos[0], 3)
-                if !ok {
-                    panic("failed to read verts")
-                }
-            case .texcoord:
-                ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.uv[0], 2)
-                if !ok {
-                    panic("failed to read verts")
-                }
-            case .normal:
-                ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.normal[0], 3)
-                if !ok {
-                    panic("failed to read verts")
-                }
-            case: // ignore
-            }
+        // rest pose
+        if j.has_matrix {
+            panic("TODO: convert matrix to pose TRS")
+        } else {
+            mesh.skeleton.rest_pose[i].translation = j.translation
+            mesh.skeleton.rest_pose[i].rotation    = j.rotation
+            mesh.skeleton.rest_pose[i].scale       = j.scale
         }
-    }
 
-    mesh.vertex_buffer = sg.make_buffer({
-        usage = { vertex_buffer = true },
+		mesh.skeleton.joints[i].parent = node_to_joint[j.parent]
+        if mesh.skeleton.joints[i].parent == i {
+            // i.e. it points to itself
+            mesh.skeleton.joints[i].parent = -1
+        }
+        fmt.printfln("%d joint %s parented to %d", i, j.name, mesh.skeleton.joints[i].parent)
+	}
+
+    // Load animations
+    mesh.animations = make([]Animation, len(data.animations))
+
+	for animation, i in data.animations {
+        mesh.animations[i].tracks = make([]JointTrack, len(mesh.skeleton.joints))
+        ani := mesh.animations[i]
+        ani.duration = 0
+
+        // TODO: store name
+		for c, ci in animation.channels {
+			#partial switch c.target_path {
+	        case .translation:
+                joint_idx := node_to_joint[c.target_node]
+                ani.tracks[joint_idx].translation_times  = make([]f32, c.sampler.input.count)
+                ani.tracks[joint_idx].translation_values = make([][3]f32, c.sampler.output.count)
+                ani.tracks[joint_idx].translation_linear = c.sampler.interpolation == .linear
+
+                fmt.printfln("Added %d tracks to joint %d", c.sampler.input.count, joint_idx)
+
+                for input_i in 0..<c.sampler.input.count {
+				    if !cgltf.accessor_read_float(c.sampler.input, cast(uint)input_i, &ani.tracks[joint_idx].translation_times[input_i], 1) {
+					    panic("failed to read pos timings")
+				    }
+                    ani.duration = glsl.max(ani.duration, ani.tracks[joint_idx].translation_times[input_i])
+                }
+
+                for output_i in 0..<c.sampler.output.count {
+				    if !cgltf.accessor_read_float(c.sampler.output, cast(uint)output_i, &ani.tracks[joint_idx].translation_values[output_i][0], 3) {
+					    panic("failed to read pos values")
+				    }
+                }
+
+			case .rotation:
+                joint_idx := node_to_joint[c.target_node]
+                ani.tracks[joint_idx].rotation_times  = make([]f32, c.sampler.input.count)
+                ani.tracks[joint_idx].rotation_values = make([][4]f32, c.sampler.output.count)
+                ani.tracks[joint_idx].rotation_linear = c.sampler.interpolation == .linear
+
+                for input_i in 0..<c.sampler.input.count {
+				    if !cgltf.accessor_read_float(c.sampler.input, cast(uint)input_i, &ani.tracks[joint_idx].rotation_times[input_i], 1) {
+					    panic("failed to read rot timings")
+				    }
+                    ani.duration = glsl.max(ani.duration, ani.tracks[joint_idx].rotation_times[input_i])
+                }
+
+                for output_i in 0..<c.sampler.output.count {
+				    if !cgltf.accessor_read_float(c.sampler.output, cast(uint)output_i, &ani.tracks[joint_idx].rotation_values[output_i][0], 4) {
+					    panic("failed to read rot values")
+				    }
+                }
+
+			case .scale:
+                joint_idx := node_to_joint[c.target_node]
+                ani.tracks[joint_idx].scale_times  = make([]f32, c.sampler.input.count)
+                ani.tracks[joint_idx].scale_values = make([][3]f32, c.sampler.output.count)
+                ani.tracks[joint_idx].scale_linear = c.sampler.interpolation == .linear
+
+                for input_i in 0..<c.sampler.input.count {
+				    if !cgltf.accessor_read_float(c.sampler.input, cast(uint)input_i, &ani.tracks[joint_idx].scale_times[input_i], 1) {
+					    panic("failed to read scale timings")
+				    }
+                    ani.duration = glsl.max(ani.duration, ani.tracks[joint_idx].scale_times[input_i])
+                }
+
+                for output_i in 0..<c.sampler.output.count {
+				    if !cgltf.accessor_read_float(c.sampler.output, cast(uint)output_i, &ani.tracks[joint_idx].scale_values[output_i][0], 3) {
+					    panic("failed to read scale values")
+				    }
+                }
+			}
+		}
+        fmt.printfln("animation duration %f", ani.duration)
+	}
+
+
+	// load vert data
+	p := data.meshes[0].primitives[0]
+	count := cast(int)p.attributes[0].data.count
+	fmt.printf("%s: mesh 0 primative 0 attr count %d\n", filename, count)
+
+	verts := make([]MeshVert, count)
+	defer delete(verts)
+
+	for i in 0 ..< count {
+		v := &verts[i]
+
+		for a in p.attributes {
+
+			#partial switch a.type {
+			case .position:
+				ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.pos[0], 3)
+				if !ok {
+					panic("failed to read verts")
+				}
+			case .texcoord:
+				if a.index == 0 {
+ 	                // limited to 1 set of uvs
+					ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.uv[0], 2)
+					if !ok {
+						panic("failed to read verts")
+					}
+				}
+			case .normal:
+				ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.normal[0], 3)
+				if !ok {
+					panic("failed to read verts")
+				}
+			case .joints:
+				ok := cgltf.accessor_read_uint(a.data, cast(uint)i, &v.joints[0], 4)
+				if !ok {
+					panic("failed to read joint")
+				}
+			case .weights:
+				ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.weights[0], 4)
+				if !ok {
+					panic("failed to read weights")
+				}
+			}
+		}
+	}
+
+    // load vertex buffer
+    fmt.printfln("len(verts) * size_of(MeshVert) %d", len(verts) * size_of(MeshVert))
+	mesh.vertex_buffer = sg.make_buffer({
+        usage = { vertex_buffer = true, immutable = true },
         data = {
             ptr = raw_data(verts),
-            size = len(verts) * size_of(MeshVert),
-        },
+            size =len(verts) * size_of(MeshVert),
+        }
     })
 
-    //fmt.printf("\n%d index data: %v\n", cast(i32)p.indices.count, p.indices.buffer_view.buffer.data)
+	index_count := cast(i32)p.indices.count
+	unpacked_indices := make([]u16, index_count) // Or u32 if your models are large
+	defer delete(unpacked_indices)
 
-    index_count := cast(i32)p.indices.count
-    unpacked_indices := make([]u16, index_count) // Or u32 if your models are large
-    defer delete(unpacked_indices)
+	for i in 0 ..< index_count {
+		unpacked_indices[i] = cast(u16)cgltf.accessor_read_index(p.indices, cast(uint)i)
+	}
 
-    for i in 0..<index_count {
-        unpacked_indices[i] = cast(u16)cgltf.accessor_read_index(p.indices, cast(uint)i)
-    }
-
-    // load index buffer
-    mesh.index_buffer = sg.make_buffer({
-        usage = { index_buffer = true },
-        data  = {
-            ptr  = raw_data(unpacked_indices),
-            size = len(unpacked_indices) * size_of(u16),
+	// load index buffer
+	mesh.index_buffer = sg.make_buffer({
+		usage = { index_buffer = true, immutable = true },
+		data = {
+            ptr = raw_data(unpacked_indices),
+            size = len(unpacked_indices) * size_of(u16)
         },
-    })
+	})
 
-    mesh.index_count = index_count
+	mesh.index_count = index_count
 
-    return mesh
+	return mesh
 }
