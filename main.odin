@@ -108,10 +108,8 @@ init :: proc "c" () {
         forward  = {0,0,0},
         yaw      = -90.0,
         pitch    = 0.0,
-        speed    = 25.0,
+        speed    = 50.0,
     }
-
-    fmt.println("billboards done")
 
     // Meshes
     state.meshes = init_meshes()
@@ -141,23 +139,21 @@ init :: proc "c" () {
 frame :: proc "c" () {
 
     context = runtime.default_context()
-    fmt.println("frame 1")
-    
     t := f32(sapp.frame_duration())
 
     handle_global_actions()
 
     update_player(&state.player, &state.input, t)
-    state.player.position.y = glsl.max(state.player.position.y, get_terrain_height(&state.terrain, state.player.position.x, state.player.position.z) + 10.0)
-
+    gravity := 6.7 * t
+    state.player.position.y = glsl.max(state.player.position.y - gravity , get_terrain_height(&state.terrain, state.player.position.x, state.player.position.z) + 1.0)
     state.meshes.models[0].transform.pos = state.player.position
-    state.meshes.models[0].transform.rot = quat_from_pitch_yaw(glsl.radians(state.player.pitch), -glsl.radians(state.player.yaw))
+    state.meshes.models[0].transform.rot = quat_from_pitch_yaw(glsl.radians(state.player.pitch), -glsl.radians(state.player.yaw - 90))
     // TEMP: use billboard 0 as the player sprite
 
     state.camera.aspect = sapp.widthf() / sapp.heightf()
 
-    update_fps_camera(&state.camera, t)
-    //update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 5)
+    //update_fps_camera(&state.camera, t)
+    update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 5)
 
     // TEMP: stick camera to the terrain
     //height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z)
@@ -205,8 +201,6 @@ frame :: proc "c" () {
     draw_billboards(&state.billboards, &state.camera)
 
     sg.end_pass()
-
-    fmt.println("frame pass 2")
 
     // pass 2: Displaying and scaling render texture
     sg.begin_pass({ action = state.display.pass, swapchain = sglue.swapchain() })

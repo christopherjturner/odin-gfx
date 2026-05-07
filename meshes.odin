@@ -150,13 +150,18 @@ update_animation :: proc(model: ^Model, dt: f32) {
         return
     }
     skeleton := &model.mesh.skeleton
-    model.animator.animation_time = model.animator.animation_time + dt
+    model.animator.animation_time += dt
+
+    frame_start: f32 = 1.0
+    frame_end: f32 =  1.5
+
+    frame_time :=  frame_start + glsl.mod(model.animator.animation_time, frame_end - frame_start)
     // For rest pose only:
 
     copy(model.animator.pose, skeleton.rest_pose)
     for _, i in model.mesh.skeleton.joints {
         track := model.mesh.animations[0].tracks[i]
-        model.animator.pose[i] = sample_track(track, model.animator.animation_time, model.animator.pose[i])
+        model.animator.pose[i] = sample_track(track, frame_time, model.animator.pose[i])
     }
 
     build_global_mats(skeleton, model.animator)
