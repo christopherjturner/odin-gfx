@@ -189,9 +189,8 @@ sample_track :: proc(track: JointTrack, t: f32, base_pose: Pose) -> Pose {
             ra = (t - track.rotation_times[r1]) / (track.rotation_times[r2] - track.rotation_times[r1])
         }
 
-        lerped_rot := glsl.lerp(track.rotation_values[r1], track.rotation_values[r2], ra)
-        // Ensure the resulting quaternion is normalized so the mesh doesn't distort
-        pose.rotation = transmute([4]f32)glsl.normalize(transmute(quaternion128)lerped_rot)
+        // TODO: check if we still need to normalise it after slerp
+        pose.rotation = glsl.slerp(track.rotation_values[r1], track.rotation_values[r2], ra)
     }
 
     // Only sample Scale if the track exists
@@ -241,16 +240,13 @@ find_keyframes :: proc(track: JointTrack, t: f32) -> (t1, t2, r1, r2, s1, s2: in
     t1, t2 = find_keyframe_pair(track.translation_times, t)
     r1, r2 = find_keyframe_pair(track.rotation_times, t)
     s1, s2 = find_keyframe_pair(track.scale_times, t)
-
     return
 }
 
 pose_to_mat4 :: proc(p: Pose) -> glsl.mat4 {
     T := glsl.mat4Translate(p.translation)
-    local_rot := p.rotation
-    R := glsl.mat4FromQuat(transmute(quaternion128)local_rot)
+    R := glsl.mat4FromQuat(p.rotation)
     S := glsl.mat4Scale(p.scale)
-
     return T * R * S
 }
 

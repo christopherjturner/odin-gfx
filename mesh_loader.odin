@@ -26,12 +26,12 @@ Mesh :: struct {
 
 Joint :: struct {
 	parent:       int,
-	inverse_bind: [16]f32,
+	inverse_bind: glsl.mat4,
 }
 
 Pose :: struct {
 	translation: [3]f32,
-	rotation:    [4]f32,
+	rotation:    quaternion128,
 	scale:       [3]f32,
 }
 
@@ -46,7 +46,7 @@ JointTrack :: struct {
     translation_linear: bool,
 
 	rotation_times:     []f32,
-	rotation_values:    [][4]f32,
+	rotation_values:    []quaternion128,
     rotation_linear:    bool,
 
     scale_times:        []f32,
@@ -88,22 +88,20 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 
 	for j, i in data.skins[0].joints {
 
-        // bind matrix
-		if !cgltf.accessor_read_float(
-			data.skins[0].inverse_bind_matrices,
-			uint(i),
-			&mesh.skeleton.joints[i].inverse_bind[0],
-			16,
-		) {
+        // inverse bind matrix
+        unaligned_mat: [16]f32
+		if !cgltf.accessor_read_float(data.skins[0].inverse_bind_matrices, uint(i), &unaligned_mat[0], 16) {
 			panic("failed to read inverse bind matrix")
 		}
+        mesh.skeleton.joints[i].inverse_bind = transmute(glsl.mat4)unaligned_mat
 
         // rest pose
         if j.has_matrix {
             panic("TODO: convert matrix to pose TRS")
         } else {
+            rot := transmute(quaternion128)j.rotation
             mesh.skeleton.rest_pose[i].translation = j.translation
-            mesh.skeleton.rest_pose[i].rotation    = j.rotation
+            mesh.skeleton.rest_pose[i].rotation    = rot
             mesh.skeleton.rest_pose[i].scale       = j.scale
         }
 
@@ -127,7 +125,9 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 		for c, ci in animation.channels {
 			#partial switch c.target_path {
 	        case .translation:
-                joint_idx := node_to_joint[c.target_node]
+                joint_idx, is_joint := node_to_joint[c.target_node]
+                if !is_joint do continue
+
                 ani.tracks[joint_idx].translation_times  = make([]f32, c.sampler.input.count)
                 ani.tracks[joint_idx].translation_values = make([][3]f32, c.sampler.output.count)
                 ani.tracks[joint_idx].translation_linear = c.sampler.interpolation == .linear
@@ -148,9 +148,11 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
                 }
 
 			case .rotation:
-                joint_idx := node_to_joint[c.target_node]
+                joint_idx, is_joint := node_to_joint[c.target_node]
+                if !is_joint do continue
+
                 ani.tracks[joint_idx].rotation_times  = make([]f32, c.sampler.input.count)
-                ani.tracks[joint_idx].rotation_values = make([][4]f32, c.sampler.output.count)
+                ani.tracks[joint_idx].rotation_values = make([]quaternion128, c.sampler.output.count)
                 ani.tracks[joint_idx].rotation_linear = c.sampler.interpolation == .linear
 
                 for input_i in 0..<c.sampler.input.count {
@@ -161,13 +163,16 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
                 }
 
                 for output_i in 0..<c.sampler.output.count {
-				    if !cgltf.accessor_read_float(c.sampler.output, cast(uint)output_i, &ani.tracks[joint_idx].rotation_values[output_i][0], 4) {
+                    unaligned_rot: [4]f32
+				    if !cgltf.accessor_read_float(c.sampler.output, cast(uint)output_i, &unaligned_rot[0], 4) {
 					    panic("failed to read rot values")
 				    }
+                    ani.tracks[joint_idx].rotation_values[output_i] = transmute(quaternion128)unaligned_rot
                 }
 
 			case .scale:
-                joint_idx := node_to_joint[c.target_node]
+                joint_idx, is_joint := node_to_joint[c.target_node]
+                if !is_joint do continue
                 ani.tracks[joint_idx].scale_times  = make([]f32, c.sampler.input.count)
                 ani.tracks[joint_idx].scale_values = make([][3]f32, c.sampler.output.count)
                 ani.tracks[joint_idx].scale_linear = c.sampler.interpolation == .linear
@@ -237,7 +242,6 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 	}
 
     // load vertex buffer
-    fmt.printfln("len(verts) * size_of(MeshVert) %d", len(verts) * size_of(MeshVert))
 	mesh.vertex_buffer = sg.make_buffer({
         usage = { vertex_buffer = true, immutable = true },
         data = {
