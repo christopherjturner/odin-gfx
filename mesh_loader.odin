@@ -1,7 +1,6 @@
 package main
 
 import "core:fmt"
-import "core:math/linalg"
 import "core:math/linalg/glsl"
 import "vendor:cgltf"
 
@@ -122,7 +121,7 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
         ani.duration = 0
 
         // TODO: store name
-		for c, ci in animation.channels {
+		for c in animation.channels {
 			#partial switch c.target_path {
 	        case .translation:
                 joint_idx, is_joint := node_to_joint[c.target_node]
@@ -135,14 +134,14 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
                 fmt.printfln("Added %d tracks to joint %d", c.sampler.input.count, joint_idx)
 
                 for input_i in 0..<c.sampler.input.count {
-				    if !cgltf.accessor_read_float(c.sampler.input, cast(uint)input_i, &ani.tracks[joint_idx].translation_times[input_i], 1) {
+				    if !cgltf.accessor_read_float(c.sampler.input, input_i, &ani.tracks[joint_idx].translation_times[input_i], 1) {
 					    panic("failed to read pos timings")
 				    }
                     ani.duration = glsl.max(ani.duration, ani.tracks[joint_idx].translation_times[input_i])
                 }
 
                 for output_i in 0..<c.sampler.output.count {
-				    if !cgltf.accessor_read_float(c.sampler.output, cast(uint)output_i, &ani.tracks[joint_idx].translation_values[output_i][0], 3) {
+				    if !cgltf.accessor_read_float(c.sampler.output, output_i, &ani.tracks[joint_idx].translation_values[output_i][0], 3) {
 					    panic("failed to read pos values")
 				    }
                 }
@@ -156,7 +155,7 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
                 ani.tracks[joint_idx].rotation_linear = c.sampler.interpolation == .linear
 
                 for input_i in 0..<c.sampler.input.count {
-				    if !cgltf.accessor_read_float(c.sampler.input, cast(uint)input_i, &ani.tracks[joint_idx].rotation_times[input_i], 1) {
+				    if !cgltf.accessor_read_float(c.sampler.input, input_i, &ani.tracks[joint_idx].rotation_times[input_i], 1) {
 					    panic("failed to read rot timings")
 				    }
                     ani.duration = glsl.max(ani.duration, ani.tracks[joint_idx].rotation_times[input_i])
@@ -164,7 +163,7 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 
                 for output_i in 0..<c.sampler.output.count {
                     unaligned_rot: [4]f32
-				    if !cgltf.accessor_read_float(c.sampler.output, cast(uint)output_i, &unaligned_rot[0], 4) {
+				    if !cgltf.accessor_read_float(c.sampler.output, output_i, &unaligned_rot[0], 4) {
 					    panic("failed to read rot values")
 				    }
                     ani.tracks[joint_idx].rotation_values[output_i] = transmute(quaternion128)unaligned_rot
@@ -178,14 +177,14 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
                 ani.tracks[joint_idx].scale_linear = c.sampler.interpolation == .linear
 
                 for input_i in 0..<c.sampler.input.count {
-				    if !cgltf.accessor_read_float(c.sampler.input, cast(uint)input_i, &ani.tracks[joint_idx].scale_times[input_i], 1) {
+				    if !cgltf.accessor_read_float(c.sampler.input, input_i, &ani.tracks[joint_idx].scale_times[input_i], 1) {
 					    panic("failed to read scale timings")
 				    }
                     ani.duration = glsl.max(ani.duration, ani.tracks[joint_idx].scale_times[input_i])
                 }
 
                 for output_i in 0..<c.sampler.output.count {
-				    if !cgltf.accessor_read_float(c.sampler.output, cast(uint)output_i, &ani.tracks[joint_idx].scale_values[output_i][0], 3) {
+				    if !cgltf.accessor_read_float(c.sampler.output, output_i, &ani.tracks[joint_idx].scale_values[output_i][0], 3) {
 					    panic("failed to read scale values")
 				    }
                 }

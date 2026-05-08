@@ -1,7 +1,7 @@
 package main
 
 import "core:math/linalg/glsl"
-import "core:fmt"
+
 
 Player :: struct {
     position : glsl.vec3,

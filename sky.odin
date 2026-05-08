@@ -1,9 +1,8 @@
 package main
 
-import "core:fmt"
 import "core:math"
 import "core:math/linalg/glsl"
-import img "vendor:stb/image"
+
 import sg "./sokol/gfx"
 import "./shaders"
 

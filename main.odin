@@ -2,7 +2,7 @@ package main
 
 import "base:runtime"
 import "core:fmt"
-import img "vendor:stb/image"
+
 import slog "./sokol/log"
 import sg "./sokol/gfx"
 import sgl "./sokol/gl"
@@ -130,6 +130,8 @@ init :: proc "c" () {
     // UIs
     state.game_ui  = init_game_ui();
     state.debug_ui = init_debug_ui();
+
+    fmt.printfln("Who/what is podgin?")
 }
 
 
@@ -358,8 +360,6 @@ init_display_renderer :: proc(color_img: sg.Image, depth_img: sg.Image) {
         wrap_u     = .REPEAT,
         wrap_v     = .REPEAT,
     })
-
-    sky_col := state.sky.state.now.horizon_color;
 
     state.display.pass = {
         colors = {

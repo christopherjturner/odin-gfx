@@ -2,8 +2,6 @@ package main
 
 import "core:math/linalg/glsl"
 
-import sapp "./sokol/app"
-
 Camera :: struct {
     position : glsl.vec3,
     front    : glsl.vec3,
@@ -93,8 +91,8 @@ update_camera_follow_behind_target :: proc(
 
     cam.position = target - forward * distance + world_up * height
 
-    height := get_terrain_height(&state.terrain, cam.position.x, cam.position.z)
-    cam.position.y = glsl.max(height + 3.0, cam.position.y)
+    ground := get_terrain_height(&state.terrain, cam.position.x, cam.position.z)
+    cam.position.y = glsl.max(ground + 1.0, cam.position.y)
 
     // Look at the target, slightly above its origin
     look_target := target + world_up * height * 0.5

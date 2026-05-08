@@ -1,9 +1,5 @@
 package main
 
-import "core:fmt"
-import "core:math"
-import "core:math/linalg/glsl"
-
 import sapp "./sokol/app"
 import sg "./sokol/gfx"
 import "./shaders"
