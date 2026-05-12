@@ -28,17 +28,6 @@ Model :: struct {
     animator:    ^Animator,
 }
 
-Animator :: struct {
-    animation_index: int,
-    animation_time:  f32,
-
-    last_update: f32,
-
-    pose:        []Pose,
-    global_mats: []glsl.mat4,
-    skin_mats:   [64]glsl.mat4,
-}
-
 
 init_meshes :: proc() -> Mesh_Renderer {
 	mesh_renderer: Mesh_Renderer
@@ -46,6 +35,7 @@ init_meshes :: proc() -> Mesh_Renderer {
 	// TODO: dynamically load the mesh_renderer from data.
 	// TODO: pack all the mesh_renderer into a single vertex bufffer.
 	mesh := load_mesh("./assets/meshes/pigeon1.glb")
+    //mesh := load_mesh("./assets/meshes/pigeon3/Pigeon.glb")
 
 	mesh_renderer.bind.vertex_buffers[0] = mesh.vertex_buffer
 	mesh_renderer.bind.index_buffer = mesh.index_buffer
@@ -56,6 +46,7 @@ init_meshes :: proc() -> Mesh_Renderer {
 	mesh_renderer.models[0].transform.pos = {3, 4, 3}
 	mesh_renderer.models[0].transform.rot.w = 1
 	mesh_renderer.models[0].transform.scale = {0.1, 0.1, 0.1}
+    //mesh_renderer.models[0].transform.scale = {1, 1, 1}
 
 	shader := sg.make_shader(shaders.meshshader_shader_desc(sg.query_backend()))
 	mesh_renderer.pip = sg.make_pipeline({
@@ -76,6 +67,7 @@ init_meshes :: proc() -> Mesh_Renderer {
 	})
 
 	// TODO: load from the glsl instead
+	//texture := load_texture("assets/meshes/pigeon3/textures/Image_0_0.png")
 	texture := load_texture("./assets/meshes/pigeon1/textures/my_67_baseColor.png")
 	mesh_renderer.bind.views[shaders.VIEW_mesh_tex] = sg.make_view({texture = {image = texture}})
 

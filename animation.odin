@@ -5,9 +5,22 @@ import "core:mem"
 
 
 ANIMATION_FPS: f32 = 1.0 / 60
+MAX_JOINTS :: 64
+
+Animator :: struct {
+    animation_index: int,
+    animation_time:  f32,
+    last_update:     f32,
+
+    pose:        []Pose,
+    global_mats: []glsl.mat4,
+    skin_mats:   [64]glsl.mat4,
+}
+
 
 init_animator :: proc(mesh: ^Mesh, allocator: mem.Allocator) -> ^Animator {
     joint_count := len(mesh.skeleton.joints)
+    assert(joint_count <= MAX_JOINTS)
 
     inst := new(Animator)
     inst.animation_index = 0
@@ -19,15 +32,13 @@ init_animator :: proc(mesh: ^Mesh, allocator: mem.Allocator) -> ^Animator {
     return inst
 }
 
-
-
 update_animation :: proc(model: ^Model, dt: f32) {
 
     if model.animator == nil {
         return
     }
 
-    // cap animation FPS
+    // Cap animation FPS
     model.animator.last_update += dt
     if model.animator.last_update < ANIMATION_FPS {
         return

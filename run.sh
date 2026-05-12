@@ -13,6 +13,7 @@ shaders=(
   terrain
   meshshader
   starshader
+  gameuishader
 )
 
 compile_shader() {

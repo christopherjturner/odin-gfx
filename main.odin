@@ -134,6 +134,7 @@ init :: proc "c" () {
     fmt.printfln("Who/what is podgin?")
 }
 
+CHASECAM :: true
 
 //------------//
 // Frame
@@ -145,17 +146,17 @@ frame :: proc "c" () {
 
     handle_global_actions()
 
-    update_player(&state.player, &state.input, t)
-    gravity := 6.7 * t
-    state.player.position.y = glsl.max(state.player.position.y - gravity , get_terrain_height(&state.terrain, state.player.position.x, state.player.position.z) + 1.0)
-    state.meshes.models[0].transform.pos = state.player.position
-    state.meshes.models[0].transform.rot = quat_from_pitch_yaw(glsl.radians(state.player.pitch), -glsl.radians(state.player.yaw - 90))
-    // TEMP: use billboard 0 as the player sprite
-
     state.camera.aspect = sapp.widthf() / sapp.heightf()
-
-    //update_fps_camera(&state.camera, t)
-    update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 5)
+    if CHASECAM {
+        update_player(&state.player, &state.input, t)
+        gravity := 6.7 * t
+        state.player.position.y = glsl.max(state.player.position.y - gravity , get_terrain_height(&state.terrain, state.player.position.x, state.player.position.z) + 1.0)
+        state.meshes.models[0].transform.pos = state.player.position
+        state.meshes.models[0].transform.rot = quat_from_pitch_yaw(glsl.radians(state.player.pitch), -glsl.radians(state.player.yaw - 90))
+        update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 5)
+    } else {
+        update_fps_camera(&state.camera, t)
+    }
 
     // TEMP: stick camera to the terrain
     //height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z)
