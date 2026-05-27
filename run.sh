@@ -14,6 +14,8 @@ shaders=(
   meshshader
   starshader
   gameuishader
+  aabbshader
+  particles
 )
 
 compile_shader() {

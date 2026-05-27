@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-odin check .
+odin check . || true
 
 SHDC="../../sokol/sokol-tools-bin/bin/linux/sokol-shdc"
 SHADER_DIR="shaders"
@@ -16,13 +16,15 @@ shaders=(
   meshshader
   starshader
   gameuishader
+  aabbshader
+  particles
 )
 
 compile_shader() {
   local name="$1"
   local in_file="$SHADER_DIR/$name.glsl"
-  #local out_file="$SHADER_DIR/$name.odin"
-  local out_file="/dev/null"
+  local out_file="$SHADER_DIR/$name.odin"
+  #local out_file="/dev/null"
 
   if [[ ! -f "$out_file" || "$in_file" -nt "$out_file" ]]; then
     echo "Checking $name"

@@ -1,5 +1,7 @@
 package main
 
+import "core:fmt"
+
 import sg "./sokol/gfx"
 import "./shaders"
 
@@ -18,9 +20,10 @@ Billboard_Instance :: struct {
 }
 
 Billboard_Renderer :: struct {
-    pip:  sg.Pipeline,
-    bind: sg.Bindings,
-    instances: [1]Billboard_Instance
+    pip:       sg.Pipeline,
+    bind:      sg.Bindings,
+    instances: [MAX_BILLBOARDS]Billboard_Instance,
+    active:    uint,
 }
 
 instance_buffer_desc := sg.Buffer_Desc{
@@ -31,10 +34,16 @@ instance_buffer_desc := sg.Buffer_Desc{
     },
     label = "billboard-instance-buffer",
 }
-
+/*
 billboard_quad := [6]Billboard_Vertex{
     {{-0.5, -0.5, 0.0}, {0, 0}}, {{ 0.5, -0.5, 0.0}, {1, 0}}, {{ 0.5,  0.5, 0.0}, {1, 1}},
     {{-0.5, -0.5, 0.0}, {0, 0}}, {{ 0.5,  0.5, 0.0}, {1, 1}}, {{-0.5,  0.5, 0.0}, {0, 1}},
+}*/
+
+
+billboard_quad := [6]Billboard_Vertex{
+    {{0.0, 0.0, 0.0}, {0, 0}}, {{ 1.0, 0.0, 0.0}, {1, 0}}, {{ 1.0,  1.0, 0.0}, {1, 1}},
+    {{0.0, 0.0, 0.0}, {0, 0}}, {{ 1.0, 1.0, 0.0}, {1, 1}}, {{ 0.0,  1.0, 0.0}, {0, 1}},
 }
 
 
@@ -91,30 +100,40 @@ init_billboards :: proc() -> Billboard_Renderer {
         },
     })
 
-    billboard.instances = {
-        {{4, 0.5, 4}, 5.0,  {1, 1, 1, 1}, 0}
-    }
+    push_billboard(&billboard, { {4, 0.0, 4}, 5.0, {1, 1, 1, 1}, 0 })
+    push_billboard(&billboard, { {-10, -10.0, 0}, 4.0, {1, 1, 1, 1}, 0 })
+    push_billboard(&billboard, { {-3, -10.0, 4}, 5.0, {1, 1, 1, 1}, 0 })
 
     return billboard
 }
 
 draw_billboards :: proc(bb: ^Billboard_Renderer, cam: ^Camera) {
 
-    vp := get_view_proj(cam)
+    view_proj := get_view_proj(cam)
     uniforms := shaders.Billboard_Params{
-        view_proj     = transmute([16]f32)vp,
+        view_proj     = transmute([16]f32)view_proj,
         ambient_color = state.sky.state.now.ambient_color,
     }
 
 
     // update instances (these arent dynamic yet, but they will be!)
     sg.update_buffer(bb.bind.vertex_buffers[1], {
-        ptr  = &bb.instances[0], // TODO: be careful about the pointers if/when we switch to a slice
-        size = size_of(bb.instances),
+        ptr  = raw_data(bb.instances[0:bb.active]), // TODO: be careful about the pointers if/when we switch to a slice
+        size = bb.active * size_of(Billboard_Instance),
     })
 
     sg.apply_pipeline(bb.pip)
     sg.apply_bindings(bb.bind)
     sg.apply_uniforms(shaders.UB_billboard_params, { ptr = &uniforms, size = size_of(uniforms) })
-    sg.draw(0, 6, len(bb.instances))
+    sg.draw(0, 6, bb.active)
+}
+
+clear_billboards :: proc(bb: ^Billboard_Renderer) {
+    bb.active = 0
+}
+
+push_billboard :: proc(bb :^Billboard_Renderer, instance: Billboard_Instance) {
+    bb.instances[bb.active] = instance
+    fmt.printfln("added %d %v", bb.active, bb.instances[bb.active])
+    bb.active += 1
 }

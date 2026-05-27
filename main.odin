@@ -25,6 +25,7 @@ FONT_ORIC  :: 5
 OFFSCREEN_WIDTH  :: 640
 OFFSCREEN_HEIGHT :: 480
 
+CHASECAM :: false
 
 state: struct {
     offscreen: struct {
@@ -42,6 +43,7 @@ state: struct {
         bind: sg.Bindings,
         count: i32,
     },
+    aabb: ^AABB_Debug_Renderer,
     world: struct {
         game_time:       f32,
         time_of_day:     f32,
@@ -49,11 +51,13 @@ state: struct {
         fog_start:       f32,
         fog_end:         f32,
     },
+    static_meshes: Static_Mesh_Renderer,
     meshes:     Mesh_Renderer,
     sky:        Sky_Renderer,
     stars:      Star_Renderer,
     billboards: Billboard_Renderer,
     terrain:    Terrain_Renderer,
+    particles:  Particle_System,
     game_ui:    ^Game_UI,
     camera:     Camera,
     debug_ui:   ^Debug_UI,
@@ -105,17 +109,21 @@ init :: proc "c" () {
 
     state.player = {
         position = state.billboards.instances[0].pos,
-        forward  = {0,0,0},
+        forward  = { 0, 0, 0 },
         yaw      = -90.0,
         pitch    = 0.0,
         speed    = 50.0,
     }
 
     // Meshes
+    state.static_meshes = init_static_meshes()
     state.meshes = init_meshes()
 
+    state.particles = init_particles()
+
     // Grid generation
-    init_grid()
+    //init_grid()
+    state.aabb = init_aabb_renderer()
 
     // Display Pipeline setup
     offscreen_img, offscreen_depth_img := init_offscreen_renderer()
@@ -134,7 +142,7 @@ init :: proc "c" () {
     fmt.printfln("Who/what is podgin?")
 }
 
-CHASECAM :: true
+
 
 //------------//
 // Frame
@@ -155,12 +163,10 @@ frame :: proc "c" () {
         state.meshes.models[0].transform.rot = quat_from_pitch_yaw(glsl.radians(state.player.pitch), -glsl.radians(state.player.yaw - 90))
         update_camera_follow_behind_target(&state.camera, state.player.position, state.player.forward, 25.0, 5)
     } else {
-        update_fps_camera(&state.camera, t)
+        if !state.debug_ui.active {
+            update_fps_camera(&state.camera, t)
+        }
     }
-
-    // TEMP: stick camera to the terrain
-    //height := get_terrain_height(&state.terrain, state.camera.position.x, state.camera.position.z)
-    //state.camera.position.y = glsl.max(height + 3.0, state.camera.position.y)
 
     // Get the current FPS
     fps := 1 / sapp.frame_duration()
@@ -191,42 +197,37 @@ frame :: proc "c" () {
     // SKY & stars (this doesnt write to the depth buffer, so we draw it first)
     update_sun(&state.stars, state.sky.state)
     draw_sky(&state.sky, &state.camera, t)
-    draw_stars(&state.stars, &state.camera, state.world.time_of_day)
+    //draw_stars(&state.stars, &state.camera, state.world.time_of_day)
 
     // Terrain
     draw_terrain(&state.terrain, &state.camera)
 
-    // GRID
-    //draw_grid(&state.camera)
-    draw_meshes(&state.meshes, &state.camera, t)
+    //draw_static_meshes(&state.static_meshes, &state.camera, t)
+    //draw_meshes(&state.meshes, &state.camera, t)
 
     // Billboards
     draw_billboards(&state.billboards, &state.camera)
+
+    draw_particles(&state.particles, &state.camera, t)
 
     sg.end_pass()
 
     // pass 2: Displaying and scaling render texture
     sg.begin_pass({ action = state.display.pass, swapchain = sglue.swapchain() })
 
-    sg.apply_pipeline(state.display.pip)
-    sg.apply_bindings(state.display.bind)
+    draw_display_renderer()
 
-    display_fs_params := shaders.Display_Fs_Params {
-        resolution     = { sapp.widthf(), sapp.heightf(),  },
-        inv_resolution = { 1.0 /sapp.widthf(), 1.0/sapp.heightf(), },
-        fog_color      = state.sky.state.now.horizon_color,
-        fog_start      = state.world.fog_start,
-        fog_end        = state.world.fog_end,
-    }
-    sg.apply_uniforms(shaders.UB_display_fs_params, { ptr = &display_fs_params, size = size_of(display_fs_params) })
-
-    sg.draw(0,3,1)
     sdtx.draw()
 
     if state.debug_ui.active {
         draw_debug_ui(state.debug_ui)
+        sapp.lock_mouse(false)
+    } else {
+        sapp.lock_mouse(true)
     }
 
+    draw_debug_aabb(state.aabb, &state.camera)
+    flush_aabb(state.aabb)
     //draw_game_ui(state.game_ui)
 
     sg.end_pass()
@@ -234,6 +235,7 @@ frame :: proc "c" () {
     sg.commit()
 
     reset_input(&state.input)
+    free_all(context.temp_allocator) 
 }
 
 //------------//
@@ -245,11 +247,8 @@ event :: proc "c" (e: ^sapp.Event) {
     handle_input_event(e, &state.input)
     // Pass input to debug UI if its open
     if state.debug_ui.active {
-        sapp.lock_mouse(false)
         debug_ui_input(e, state.debug_ui)
         return
-    } else {
-        sapp.lock_mouse(true)
     }
 
 }
@@ -288,6 +287,7 @@ handle_global_actions :: proc() {
 
     if action_released(&state.input, .Debug) {
         state.debug_ui.active = !state.debug_ui.active
+        sapp.lock_mouse(!state.debug_ui.active)
     }
 
     if action_released(&state.input, .Edit) {
@@ -368,4 +368,20 @@ init_display_renderer :: proc(color_img: sg.Image, depth_img: sg.Image) {
         },
         depth = { load_action = .CLEAR, clear_value = 1.0 },
     }
+}
+
+draw_display_renderer :: proc() {
+    sg.apply_pipeline(state.display.pip)
+    sg.apply_bindings(state.display.bind)
+
+    display_fs_params := shaders.Display_Fs_Params {
+        resolution     = { sapp.widthf(), sapp.heightf(),  },
+        inv_resolution = { 1.0 /sapp.widthf(), 1.0/sapp.heightf(), },
+        fog_color      = state.sky.state.now.horizon_color,
+        fog_start      = state.world.fog_start,
+        fog_end        = state.world.fog_end,
+    }
+    sg.apply_uniforms(shaders.UB_display_fs_params, { ptr = &display_fs_params, size = size_of(display_fs_params) })
+
+    sg.draw(0,3,1)
 }

@@ -16,7 +16,7 @@ updatePhysics :: proc (entity: ^Entity, dt: f32) {
     terrain_height := get_terrain_height(&state.terrain, entity.pos.x, entity.pos.z)
     terrain_normal := [3]f32{0,1,0} // TODO: get from terrain
 
-    if entity.pos.y > terrain_height + 0.1 {
+    if entity.pos.y > terrain_height + 0.001 {
         // Apply standard gravity in air
         entity.vel.y -= 9.8 * dt
         entity.is_grounded = false

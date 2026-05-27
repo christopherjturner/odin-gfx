@@ -21,6 +21,20 @@ Mesh :: struct {
 	index_count:   i32,
 	skeleton:      Skeleton,
     animations:    []Animation,
+    aabb:          AABB,
+}
+
+StaticMeshVert :: struct {
+	pos:     [3]f32,
+	uv:      [2]f32,
+	normal:  [3]f32,
+}
+
+StaticMesh :: struct {
+	vertex_buffer: sg.Buffer,
+	index_buffer:  sg.Buffer,
+	index_count:   i32,
+    aabb:          AABB,
 }
 
 Joint :: struct {
@@ -58,6 +72,10 @@ Animation :: struct {
 	tracks:   []JointTrack,
 }
 
+AABB :: struct {
+    min: [3]f32,
+    max: [3]f32,
+}
 
 load_mesh :: proc(filename: cstring) -> ^Mesh {
 	options: cgltf.options
@@ -76,7 +94,7 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 	}
 
     node_to_joint := make(map[^cgltf.node]int)
-    defer delete(node_to_joint) // Clean up the map's backing memory
+    defer delete(node_to_joint)
 	for j, i in data.skins[0].joints {
         node_to_joint[j] = i
     }
@@ -202,6 +220,11 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 	verts := make([]MeshVert, count)
 	defer delete(verts)
 
+    mesh.aabb = AABB {
+        min = { 999999, 999999, 999999 },
+        max = { -999999, -999999, -999999 },
+    }
+
 	for i in 0 ..< count {
 		v := &verts[i]
 
@@ -213,6 +236,8 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 				if !ok {
 					panic("failed to read verts")
 				}
+                mesh.aabb.min = { min(mesh.aabb.min[0], v.pos[0]), min(mesh.aabb.min[1], v.pos[1]), min(mesh.aabb.min[2], v.pos[2]) }
+                mesh.aabb.max = { max(mesh.aabb.max[0], v.pos[0]), max(mesh.aabb.max[1], v.pos[1]), max(mesh.aabb.max[2], v.pos[2]) }
 			case .texcoord:
 				if a.index == 0 {
  	                // limited to 1 set of uvs
@@ -235,6 +260,95 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 				ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.weights[0], 4)
 				if !ok {
 					panic("failed to read weights")
+				}
+			}
+		}
+	}
+    fmt.printfln("mesh aabb %v", mesh.aabb)
+    // load vertex buffer
+	mesh.vertex_buffer = sg.make_buffer({
+        usage = { vertex_buffer = true, immutable = true },
+        data = {
+            ptr = raw_data(verts),
+            size =len(verts) * size_of(MeshVert),
+        }
+    })
+
+	index_count := cast(i32)p.indices.count
+	unpacked_indices := make([]u16, index_count) // Or u32 if your models are large
+	defer delete(unpacked_indices)
+
+	for i in 0 ..< index_count {
+		unpacked_indices[i] = cast(u16)cgltf.accessor_read_index(p.indices, cast(uint)i)
+	}
+
+	// load index buffer
+	mesh.index_buffer = sg.make_buffer({
+		usage = { index_buffer = true, immutable = true },
+		data = {
+            ptr = raw_data(unpacked_indices),
+            size = len(unpacked_indices) * size_of(u16)
+        },
+	})
+
+	mesh.index_count = index_count
+
+	return mesh
+}
+
+
+load_static_mesh :: proc(filename: cstring) -> ^StaticMesh {
+	options: cgltf.options
+	mesh := new(StaticMesh)
+
+	data, result := cgltf.parse_file(options, filename)
+	if result != .success {
+		panic("failed to load model")
+	}
+
+	defer cgltf.free(data)
+
+	res := cgltf.load_buffers(options, data, filename)
+	if res != .success {
+		panic("failed to load buffers")
+	}
+
+	p := data.meshes[0].primitives[0]
+	count := cast(int)p.attributes[0].data.count
+	fmt.printf("%s: static mesh 0 primative 0 attr count %d\n", filename, count)
+
+	verts := make([]StaticMeshVert, count)
+	defer delete(verts)
+
+    mesh.aabb = AABB {
+        max = { -999999, -999999, -999999 },
+        min = {  999999,  999999,  999999 },
+    }
+
+	for i in 0 ..< count {
+		v := &verts[i]
+
+		for a in p.attributes {
+			#partial switch a.type {
+			case .position:
+				ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.pos[0], 3)
+				if !ok {
+					panic("failed to read verts")
+				}
+                mesh.aabb.min = { min(mesh.aabb.min[0], v.pos[0]), min(mesh.aabb.min[1], v.pos[1]), min(mesh.aabb.min[2], v.pos[2]) }
+                mesh.aabb.max = { max(mesh.aabb.max[0], v.pos[0]), max(mesh.aabb.max[1], v.pos[1]), max(mesh.aabb.max[2], v.pos[2]) }
+			case .texcoord:
+				if a.index == 0 {
+ 	                // limited to 1 set of uvs
+					ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.uv[0], 2)
+					if !ok {
+						panic("failed to read verts")
+					}
+				}
+			case .normal:
+				ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.normal[0], 3)
+				if !ok {
+					panic("failed to read verts")
 				}
 			}
 		}

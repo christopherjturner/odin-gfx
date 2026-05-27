@@ -15,7 +15,7 @@ layout(binding=0) uniform billboard_params {
 };
 
 // Per-vertex data (the shared quad)
-in vec4 pos;
+in vec4 pos; // vec4??
 in vec2 uv;
 in vec3 inst_pos;
 in float inst_scale;

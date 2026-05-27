@@ -42,11 +42,11 @@ layout(binding=1) uniform sampler depthSmp;
 in vec2 uv;
 out vec4 frag_color;
 
-const float near      = 0.1;
-const float far       = 1000.0;
+const float near = 0.1;
+const float far  = 1000.0;
 
-const vec3  quant     = vec3(6.0, 7.0, 6.0);
-const vec3  qstep     = 1.0 / quant;
+const vec3  quant = vec3(6.0, 7.0, 6.0);
+const vec3  qstep = 1.0 / quant;
 
 
 float bayer4x4(vec2 p) {

@@ -9,6 +9,10 @@ Camera :: struct {
     right    : glsl.vec3,
     target   : glsl.vec3,
 
+    view      : glsl.mat4,
+    proj      : glsl.mat4,
+    view_proj : glsl.mat4,
+
     yaw      : f32,
     pitch    : f32,
 
@@ -52,6 +56,7 @@ update_fps_camera :: proc(cam: ^Camera, dt: f32) {
     front.z   = glsl.sin(glsl.radians(cam.yaw)) * glsl.cos(glsl.radians(cam.pitch))
     cam.front = glsl.normalize(front)
     cam.right = glsl.normalize(glsl.cross(cam.front, cam.up))
+    cam.up    = {0, 1, 0}
 
     // Movement
     speed := cam.speed * dt
@@ -70,12 +75,17 @@ update_fps_camera :: proc(cam: ^Camera, dt: f32) {
     }
 
     cam.target = cam.position + cam.front
+    update_view_proj(cam)
+}
+
+update_view_proj :: proc(cam: ^Camera) {
+    cam.proj = glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 1000.0)
+    cam.view = glsl.mat4LookAt(cam.position, cam.target, cam.up)
+    cam.view_proj = cam.proj * cam.view
 }
 
 get_view_proj :: proc(cam: ^Camera) -> glsl.mat4 {
-    proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 1000.0)
-    view := glsl.mat4LookAt(cam.position, cam.target, cam.up)
-    return proj * view
+    return cam.view_proj
 }
 
 update_camera_follow_behind_target :: proc(
@@ -101,4 +111,6 @@ update_camera_follow_behind_target :: proc(
     cam.right = glsl.normalize(glsl.cross(cam.front, world_up))
     cam.up    = glsl.normalize(glsl.cross(cam.right, cam.front))
     cam.target = target
+
+    update_view_proj(cam)
 }

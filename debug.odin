@@ -1,7 +1,9 @@
 package main
 
-import "core:fmt"
 import "base:runtime"
+import "core:fmt"
+import "core:strconv"
+
 import mu "vendor:microui"
 import sapp "./sokol/app"
 import sg "./sokol/gfx"
@@ -16,6 +18,7 @@ Debug_UI :: struct {
     atlas_smp:       sg.Sampler,
     key_map:         map[sapp.Keycode]mu.Key,
     active:          bool,
+    particles:       ^Emitter,
 }
 
 
@@ -75,6 +78,22 @@ init_debug_ui :: proc() -> ^Debug_UI {
     ctx.text_width = mu.default_atlas_text_width
     ctx.text_height = mu.default_atlas_text_height
 
+    debug_ui.key_map = make(map[sapp.Keycode]mu.Key)
+    debug_ui.key_map[sapp.Keycode.LEFT_SHIFT]   = mu.Key.SHIFT
+    debug_ui.key_map[sapp.Keycode.LEFT_CONTROL] = mu.Key.CTRL
+    debug_ui.key_map[sapp.Keycode.LEFT_ALT]     = mu.Key.ALT
+    debug_ui.key_map[sapp.Keycode.BACKSPACE]    = mu.Key.BACKSPACE
+    debug_ui.key_map[sapp.Keycode.DELETE]       = mu.Key.DELETE
+    debug_ui.key_map[sapp.Keycode.ENTER]        = mu.Key.RETURN
+    debug_ui.key_map[sapp.Keycode.LEFT]         = mu.Key.LEFT
+    debug_ui.key_map[sapp.Keycode.RIGHT]        = mu.Key.RIGHT
+    debug_ui.key_map[sapp.Keycode.HOME]         = mu.Key.HOME
+    debug_ui.key_map[sapp.Keycode.END]          = mu.Key.END
+    debug_ui.key_map[sapp.Keycode.A]            = mu.Key.A
+    debug_ui.key_map[sapp.Keycode.X]            = mu.Key.X
+    debug_ui.key_map[sapp.Keycode.C]            = mu.Key.C
+    debug_ui.key_map[sapp.Keycode.V]            = mu.Key.V
+
     return debug_ui
 }
 
@@ -84,7 +103,8 @@ draw_debug_ui :: proc(debug_ui: ^Debug_UI) {
 
     mu_ctx := &debug_ui.mu_ctx
     mu.begin(mu_ctx)
-    layout_debug_ui(mu_ctx)
+    //layout_debug_ui(mu_ctx)
+    layout_particle_ui(mu_ctx)
     mu.end(mu_ctx)
 
     r_begin(sapp.width(), sapp.height(), debug_ui)
@@ -123,6 +143,7 @@ debug_ui_input :: proc "c" (ev: ^sapp.Event, debug_ui: ^Debug_UI) {
         mu.input_scroll(mu_ctx, 0, i32(ev.scroll_y))
     case .KEY_DOWN:
         if ev.key_code in debug_ui.key_map {
+            fmt.printfln("key down, %v", ev.key_code)
             mu.input_key_down(mu_ctx, debug_ui.key_map[ev.key_code])
         }
     case .KEY_UP:
@@ -232,6 +253,46 @@ f32_slider :: proc(ctx: ^mu.Context, val: ^f32, lo, hi: f32) -> (res: mu.Result_
     return
 }
 
+f32_input :: proc(ctx: ^mu.Context, val: ^f32) -> (res: mu.Result_Set) {
+    mu.push_id(ctx, uintptr(val))
+    @(static)
+    tmp: mu.Real
+    tmp = mu.Real(val^)
+    mu.number(ctx, &tmp, 0.1)
+    val^ = f32(tmp)
+    mu.pop_id(ctx)
+    return
+}
+
+int_input :: proc(ctx: ^mu.Context, val: ^int) -> (res: mu.Result_Set) {
+    mu.push_id(ctx, uintptr(val))
+    @(static)
+    tmp: mu.Real
+    tmp = mu.Real(f32(val^))
+    mu.number(ctx, &tmp, 1)
+    val^ = int(tmp)
+    mu.pop_id(ctx)
+    return
+}
+
+
+f32_text_input :: proc(ctx: ^mu.Context, val: ^f32) -> (res: mu.Result_Set) {
+    mu.push_id(ctx, uintptr(val))
+
+    @(static)
+    buf: [16]byte
+	strconv.write_float(buf[:], f64(val^), 'g', 2, 32)
+    tmp_len := len(buf)
+    mu.textbox(ctx, buf[:], &tmp_len)
+
+    if n, ok := strconv.parse_f32(string(buf[1:])); ok {
+        fmt.printfln("%s", string(buf[:]))
+        val^ = n
+    }
+
+    mu.pop_id(ctx)
+    return
+}
 
 
 r_begin :: proc(disp_width, disp_height: i32, debug_ui: ^Debug_UI) {
@@ -301,4 +362,66 @@ r_end :: proc() {
 
 r_draw :: proc() {
     sgl.draw()
+}
+
+
+// Particle UI
+
+layout_particle_ui :: proc(ctx: ^mu.Context) {
+    p := &state.particles.emitters
+
+    if p == nil {
+        return
+    }
+
+    if mu.window(ctx, "Particle editor", {350, 250, 600, 380}) {
+        sw := i32(f32(mu.get_current_container(ctx).body.w) * 0.25)
+        hw := i32(f32(mu.get_current_container(ctx).body.w) * 0.5)
+        fw := i32(f32(mu.get_current_container(ctx).body.w))
+
+
+        mu.layout_row(ctx, {sw, sw, sw, sw, -1})
+        mu.label(ctx, "Velocity")
+        f32_input(ctx, &p.velocity.x)
+        f32_input(ctx, &p.velocity.y)
+        f32_input(ctx, &p.velocity.z)
+
+        mu.layout_row(ctx, {sw, sw, sw, sw, -1})
+        mu.label(ctx, "Velocity var")
+        f32_input(ctx, &p.velocity_variance.x)
+        f32_input(ctx, &p.velocity_variance.y)
+        f32_input(ctx, &p.velocity_variance.z)
+
+        mu.layout_row(ctx, {sw, sw, sw, sw, -1})
+        mu.label(ctx, "gravity")
+        f32_input(ctx, &p.gravity.x)
+        f32_input(ctx, &p.gravity.y)
+        f32_input(ctx, &p.gravity.z)
+
+        mu.layout_row(ctx, {sw, sw, -1})
+        mu.label(ctx, "drag")
+        f32_slider(ctx, &p.drag, 0.0, 50.0)
+
+        mu.layout_row(ctx, {sw, sw, sw, -1})
+        mu.label(ctx, "lifetime")
+        f32_input(ctx, &p.lifetime_max)
+        f32_input(ctx, &p.lifetime_variance)
+        int_input(ctx, &p.count)
+
+        mu.layout_row(ctx, {sw, sw, sw, sw, sw, sw, -1})
+        mu.label(ctx, "Color start")
+        f32_slider(ctx, &p.color_start[0], 0.0, 1.0)
+        f32_slider(ctx, &p.color_start[1], 0.0, 1.0)
+        f32_slider(ctx, &p.color_start[2], 0.0, 1.0)
+        f32_slider(ctx, &p.color_start[3], 0.0, 1.0)
+
+
+        mu.layout_row(ctx, {sw, sw, sw, sw, sw, sw, -1})
+        mu.label(ctx, "Color end")
+        f32_slider(ctx, &p.color_end[0], 0.0, 1.0)
+        f32_slider(ctx, &p.color_end[1], 0.0, 1.0)
+        f32_slider(ctx, &p.color_end[2], 0.0, 1.0)
+        f32_slider(ctx, &p.color_end[3], 0.0, 1.0)
+
+    }
 }

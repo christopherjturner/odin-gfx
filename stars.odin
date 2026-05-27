@@ -83,9 +83,7 @@ init_stars :: proc() -> Star_Renderer {
                 blend = {
                     enabled = true,
                     src_factor_rgb   = .SRC_ALPHA,
-                    dst_factor_rgb   = .ONE, // Additive blending for "bright" stars
-                    src_factor_alpha = .ONE,
-                    dst_factor_alpha = .ZERO
+                    dst_factor_rgb   = .ONE_MINUS_SRC_ALPHA,
                 }
             }
         },
@@ -118,8 +116,8 @@ add_star :: proc(stars: ^Star_Renderer, cam: ^Camera) {
 
 draw_stars :: proc(stars : ^Star_Renderer, cam: ^Camera, time_of_day: f32) {
 
-    proj := glsl.mat4Perspective(glsl.radians(cam.fov), cam.aspect, 0.1, 10000.0)
-    view := glsl.mat4LookAt(cam.position, cam.position + cam.front, cam.up)
+    proj := cam.proj
+    view := cam.view
 
     vs_uniforms := shaders.Star_Params {
         view = transmute([16]f32)view,

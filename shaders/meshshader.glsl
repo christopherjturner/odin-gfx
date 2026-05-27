@@ -48,6 +48,41 @@ void main() {
 
 @end
 
+@vs static_vs
+
+layout(binding = 0) uniform static_mesh_vs_params {
+    mat4 view_proj;
+    mat4 model;
+    vec4 ambient_color;
+    vec4 sun_color;
+    vec3 u_sun_dir;
+};
+
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec2 texcoord0;
+layout(location = 2) in vec3 normal;
+
+out vec2 v_uv;
+out vec3 v_normal;
+out vec4 v_col;
+
+void main() {
+
+  vec4 local_pos = vec4(position, 1.0);
+  vec4 world_pos = model * local_pos;
+  gl_Position    = view_proj * world_pos;
+
+  v_normal = mat3(model) * normal;
+  v_uv = vec2(texcoord0.x, texcoord0.y);
+
+  // Light
+  float diff = max(dot(normalize(v_normal), u_sun_dir), 0.0);
+  vec3 lighting = ambient_color.rgb + (diff * sun_color.rgb);
+  v_col = vec4(lighting, 1.0);
+}
+
+@end
+
 @fs fs
 in vec2 v_uv;
 in vec3 v_normal;
@@ -65,3 +100,4 @@ void main() {
 @end
 
 @program meshshader vs fs
+@program staticmeshshader static_vs fs

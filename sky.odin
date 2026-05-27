@@ -57,12 +57,14 @@ init_sky :: proc() -> Sky_Renderer {
 
     // Create an bind buffers
     sky.bind.vertex_buffers[0] = sg.make_buffer({
-        data = { ptr = &sky.verts[0], size = len(sky.verts) * size_of(Sky_Vertex) },
+        data  = { ptr = &sky.verts[0], size = len(sky.verts) * size_of(Sky_Vertex) },
+        label = "sky-vertex-buffer",
     })
 
     sky.bind.index_buffer = sg.make_buffer({
         usage = { index_buffer = true },
         data  = { ptr = &sky.indices[0], size = len(sky.indices) * size_of(u16) },
+        label = "sky-index-buffer",
     })
 
     // Load noise texture
@@ -71,7 +73,8 @@ init_sky :: proc() -> Sky_Renderer {
     sky.bind.views[shaders.VIEW_sky_tex] = sg.make_view({
         texture = {
             image = noise_texture
-        }
+        },
+        label = "sky-noise-view",
     })
 
     sky.bind.samplers[shaders.SMP_sky_smp] = sg.make_sampler({
@@ -97,6 +100,7 @@ init_sky :: proc() -> Sky_Renderer {
         index_type = .UINT16,
         cull_mode  = .BACK,
         shader     = sky_shader,
+        label      = "sky-shader-pipeline",
     })
 
     return sky
