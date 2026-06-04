@@ -114,8 +114,8 @@ init_static_meshes :: proc() -> Static_Mesh_Renderer {
 
 	// TODO: dynamically load the mesh_renderer from data.
 	// TODO: pack all the mesh_renderer into a single vertex bufffer.
-	mesh := load_static_mesh("./assets/meshes/dovecote.glb")
-    texture := load_texture("./assets/textures/dovecote.png")
+	mesh := load_static_mesh("./assets/meshes/hills1.glb")
+    texture := load_texture("./assets/grass.png")
 
     static_mesh_renderer.bind.vertex_buffers[0] = mesh.vertex_buffer
 	static_mesh_renderer.bind.index_buffer      = mesh.index_buffer

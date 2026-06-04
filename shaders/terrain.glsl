@@ -83,7 +83,7 @@ out vec4 frag_color;
 void main() {
   vec4 tex_color = texture(sampler2D(trtex, trsmp), v_uv);
   frag_color = tex_color * v_col;
-  //frag_color.rgb = mix(frag_color.rgb, v_fog_color, 1.0-v_fog).rgb;
+  frag_color.rgb = mix(frag_color.rgb, v_fog_color, 1.0-v_fog).rgb;
 }
 
 @end

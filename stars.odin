@@ -89,7 +89,7 @@ init_stars :: proc() -> Star_Renderer {
         },
         depth = {
             write_enabled = false,
-            compare = .LESS_EQUAL,
+            compare       = .LESS_EQUAL,
         },
     })
 

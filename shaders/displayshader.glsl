@@ -153,7 +153,7 @@ void main() {
   if (depth < 0.9999999) {
     float dist = linearize_depth(depth);
     float fog_factor = clamp( (dist - fog_start) / (fog_end - fog_start ), 0.0, 0.7);
-    color = mix(color, fog_color.rgb, fog_factor);
+    color = mix(color, fog_color.rgb, fog_factor * 0);
   }
 
   // Colour pop

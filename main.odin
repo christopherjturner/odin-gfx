@@ -197,7 +197,7 @@ frame :: proc "c" () {
     // SKY & stars (this doesnt write to the depth buffer, so we draw it first)
     update_sun(&state.stars, state.sky.state)
     draw_sky(&state.sky, &state.camera, t)
-    //draw_stars(&state.stars, &state.camera, state.world.time_of_day)
+    draw_stars(&state.stars, &state.camera, state.world.time_of_day)
 
     // Terrain
     draw_terrain(&state.terrain, &state.camera)
@@ -235,7 +235,7 @@ frame :: proc "c" () {
     sg.commit()
 
     reset_input(&state.input)
-    free_all(context.temp_allocator) 
+    free_all(context.temp_allocator)
 }
 
 //------------//

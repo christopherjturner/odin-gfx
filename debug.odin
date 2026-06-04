@@ -79,14 +79,15 @@ init_debug_ui :: proc() -> ^Debug_UI {
     ctx.text_height = mu.default_atlas_text_height
 
     debug_ui.key_map = make(map[sapp.Keycode]mu.Key)
-    debug_ui.key_map[sapp.Keycode.LEFT_SHIFT]   = mu.Key.SHIFT
+
     debug_ui.key_map[sapp.Keycode.LEFT_CONTROL] = mu.Key.CTRL
-    debug_ui.key_map[sapp.Keycode.LEFT_ALT]     = mu.Key.ALT
+    debug_ui.key_map[sapp.Keycode.LEFT_SHIFT]   = mu.Key.SHIFT
     debug_ui.key_map[sapp.Keycode.BACKSPACE]    = mu.Key.BACKSPACE
+    debug_ui.key_map[sapp.Keycode.LEFT_ALT]     = mu.Key.ALT
     debug_ui.key_map[sapp.Keycode.DELETE]       = mu.Key.DELETE
     debug_ui.key_map[sapp.Keycode.ENTER]        = mu.Key.RETURN
-    debug_ui.key_map[sapp.Keycode.LEFT]         = mu.Key.LEFT
     debug_ui.key_map[sapp.Keycode.RIGHT]        = mu.Key.RIGHT
+    debug_ui.key_map[sapp.Keycode.LEFT]         = mu.Key.LEFT
     debug_ui.key_map[sapp.Keycode.HOME]         = mu.Key.HOME
     debug_ui.key_map[sapp.Keycode.END]          = mu.Key.END
     debug_ui.key_map[sapp.Keycode.A]            = mu.Key.A
@@ -183,7 +184,8 @@ layout_debug_ui :: proc(ctx: ^mu.Context) {
         mu.layout_row(ctx, {hw, hw, -1})
         f32_slider(ctx, &state.sky.state.cloud.scale[0], 0.0, 1.0)
         f32_slider(ctx, &state.sky.state.cloud.scale[1], 0.0, 1.0)
-        // blend
+
+        // Blend
         mu.layout_row(ctx, {fw, -1})
         mu.label(ctx, fmt.tprintf("cloud blend %v, %v",
                                   state.sky.state.cloud.blend[0],
@@ -368,7 +370,7 @@ r_draw :: proc() {
 // Particle UI
 
 layout_particle_ui :: proc(ctx: ^mu.Context) {
-    p := &state.particles.emitters
+    p := &state.particles.emitters[0]
 
     if p == nil {
         return
@@ -400,7 +402,7 @@ layout_particle_ui :: proc(ctx: ^mu.Context) {
 
         mu.layout_row(ctx, {sw, sw, -1})
         mu.label(ctx, "drag")
-        f32_slider(ctx, &p.drag, 0.0, 50.0)
+        f32_slider(ctx, &p.drag, 0.0, 1.0)
 
         mu.layout_row(ctx, {sw, sw, sw, -1})
         mu.label(ctx, "lifetime")
@@ -409,7 +411,7 @@ layout_particle_ui :: proc(ctx: ^mu.Context) {
         int_input(ctx, &p.count)
 
         mu.layout_row(ctx, {sw, sw, sw, sw, sw, sw, -1})
-        mu.label(ctx, "Color start")
+        mu.label(ctx, "Color start (rgba)")
         f32_slider(ctx, &p.color_start[0], 0.0, 1.0)
         f32_slider(ctx, &p.color_start[1], 0.0, 1.0)
         f32_slider(ctx, &p.color_start[2], 0.0, 1.0)
@@ -417,7 +419,7 @@ layout_particle_ui :: proc(ctx: ^mu.Context) {
 
 
         mu.layout_row(ctx, {sw, sw, sw, sw, sw, sw, -1})
-        mu.label(ctx, "Color end")
+        mu.label(ctx, "Color end (rgba)")
         f32_slider(ctx, &p.color_end[0], 0.0, 1.0)
         f32_slider(ctx, &p.color_end[1], 0.0, 1.0)
         f32_slider(ctx, &p.color_end[2], 0.0, 1.0)
