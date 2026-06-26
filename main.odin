@@ -2,6 +2,8 @@ package main
 
 import "base:runtime"
 import "core:fmt"
+import "core:mem"
+import vmem "core:mem/virtual"
 
 import slog "./sokol/log"
 import sg "./sokol/gfx"
@@ -13,6 +15,8 @@ import sdtx "./sokol/debugtext"
 import "core:math/linalg/glsl"
 
 import "./shaders"
+
+MB :: 1024 * 1024
 
 FONT_KC853 :: 0
 FONT_KC854 :: 1
@@ -26,6 +30,10 @@ OFFSCREEN_WIDTH  :: 640
 OFFSCREEN_HEIGHT :: 480
 
 CHASECAM :: false
+
+allocs: struct {
+    perm: mem.Allocator
+}
 
 state: struct {
     offscreen: struct {
@@ -119,7 +127,7 @@ init :: proc "c" () {
     state.static_meshes = init_static_meshes()
     state.meshes = init_meshes()
 
-    state.particles = init_particles()
+    state.particles = init_particles(allocs.perm)
 
     // Grid generation
     //init_grid()
@@ -202,8 +210,8 @@ frame :: proc "c" () {
     // Terrain
     draw_terrain(&state.terrain, &state.camera)
 
-    //draw_static_meshes(&state.static_meshes, &state.camera, t)
-    //draw_meshes(&state.meshes, &state.camera, t)
+    draw_static_meshes(&state.static_meshes, &state.camera, t)
+    draw_meshes(&state.meshes, &state.camera, t)
 
     // Billboards
     draw_billboards(&state.billboards, &state.camera)
@@ -264,6 +272,14 @@ cleanup :: proc "c" () {
 
 main :: proc() {
 
+    perm_backing_buffer := make([]u8, 64 * MB)
+    defer delete(perm_backing_buffer)
+    perm_arena: mem.Arena
+    mem.arena_init(&perm_arena, perm_backing_buffer)
+    perm_allocator := mem.arena_allocator(&perm_arena)
+
+    allocs.perm = perm_allocator
+
     sapp.run({
         init_cb      = init,
         frame_cb     = frame,
@@ -277,6 +293,8 @@ main :: proc() {
         logger       = { func = slog.func },
         fullscreen   = true,
     })
+
+    fmt.println("goodbye")
 }
 
 handle_global_actions :: proc() {
@@ -349,7 +367,7 @@ init_display_renderer :: proc(color_img: sg.Image, depth_img: sg.Image) {
     })
 
     state.display.bind.samplers[shaders.SMP_smp] = sg.make_sampler({
-        min_filter = .LINEAR, //NEAREST,
+        min_filter = .LINEAR,
         mag_filter = .LINEAR,
         wrap_u     = .REPEAT,
         wrap_v     = .REPEAT,
@@ -376,7 +394,7 @@ draw_display_renderer :: proc() {
 
     display_fs_params := shaders.Display_Fs_Params {
         resolution     = { sapp.widthf(), sapp.heightf(),  },
-        inv_resolution = { 1.0 /sapp.widthf(), 1.0/sapp.heightf(), },
+        inv_resolution = { 1.0/sapp.widthf(), 1.0/sapp.heightf(), },
         fog_color      = state.sky.state.now.horizon_color,
         fog_start      = state.world.fog_start,
         fog_end        = state.world.fog_end,

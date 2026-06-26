@@ -104,8 +104,8 @@ draw_debug_ui :: proc(debug_ui: ^Debug_UI) {
 
     mu_ctx := &debug_ui.mu_ctx
     mu.begin(mu_ctx)
-    //layout_debug_ui(mu_ctx)
-    layout_particle_ui(mu_ctx)
+    layout_debug_ui(mu_ctx)
+    //layout_particle_ui(mu_ctx)
     mu.end(mu_ctx)
 
     r_begin(sapp.width(), sapp.height(), debug_ui)

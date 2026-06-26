@@ -52,7 +52,7 @@ void main() {
 
   // 3. Fog
   float dist  = distance(world_pos, u_camera_pos);
-  v_fog       = clamp((u_fog_end - dist) / (u_fog_end - u_fog_start), 0.0, 0.7);
+  v_fog       = clamp((u_fog_end - dist) / (u_fog_end - u_fog_start), 0.0, 1.0);
   v_fog_color = fog_color.rgb;
  
   // 4. Set outputs

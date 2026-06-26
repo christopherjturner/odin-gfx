@@ -18,7 +18,7 @@ Animator :: struct {
 }
 
 
-init_animator :: proc(mesh: ^Mesh, allocator: mem.Allocator) -> ^Animator {
+init_animator :: proc(mesh: ^AnimatedMesh, allocator: mem.Allocator) -> ^Animator {
     joint_count := len(mesh.skeleton.joints)
     assert(joint_count <= MAX_JOINTS)
 
@@ -32,7 +32,7 @@ init_animator :: proc(mesh: ^Mesh, allocator: mem.Allocator) -> ^Animator {
     return inst
 }
 
-update_animation :: proc(model: ^Model, dt: f32) {
+update_animation :: proc(model: ^AnimatedModel, dt: f32) {
 
     if model.animator == nil {
         return

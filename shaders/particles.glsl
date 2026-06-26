@@ -85,6 +85,7 @@ void main() {
   vec3 random_spread = (rand2 * 0.5) * velocity_variance;
   vec3 initial_velocity = velocity + random_spread;
   float drag_factor = (drag > 0.0) ? (1.0 - exp(-drag * age)) / drag : age;
+
   vec3 world_pos = origin + (initial_velocity * drag_factor) + (0.5 * gravity * age * age);
 
   // Orbit
@@ -142,19 +143,9 @@ const float BayerMatrix[64] = float[](
 
 
 void main() {
-  ivec2 pixelCoord = ivec2(gl_FragCoord.xy);
-  int x = pixelCoord.x % 8;
-  int y = pixelCoord.y % 8;
-  int index = x + y * 8;
-
-  float threshold = BayerMatrix[index];
-
-  vec4 tex_color = col * texture(sampler2DArray(particletex, particlesmp), vec3(uv, atlas));
-
-  //frag_color = tex_color; 
-
   if (uv.x > 1 || uv.y > 1) discard;
-  //  if (tex_color.a < threshold) discard;
+  vec4 tex_color = col * texture(sampler2DArray(particletex, particlesmp), vec3(uv, atlas));
+  if (tex_color.a < 0.01) discard;
 
   frag_color = tex_color;
 }

@@ -53,7 +53,8 @@ init_sky :: proc() -> Sky_Renderer {
     }
 
     // Generate dome
-    sky.verts, sky.indices = generate_sky_dome(8, 16)
+    //sky.verts, sky.indices = generate_sky_dome(8, 16)
+    sky.verts, sky.indices = dump_skydome()
 
     // Create an bind buffers
     sky.bind.vertex_buffers[0] = sg.make_buffer({
@@ -98,7 +99,7 @@ init_sky :: proc() -> Sky_Renderer {
             write_enabled = false,
         },
         index_type = .UINT16,
-        cull_mode  = .BACK,
+        cull_mode  = .NONE,
         shader     = sky_shader,
         label      = "sky-shader-pipeline",
     })

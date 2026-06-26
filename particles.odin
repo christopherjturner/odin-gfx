@@ -4,6 +4,7 @@ import sapp "./sokol/app"
 import sg "./sokol/gfx"
 import "core:fmt"
 import "core:math/linalg/glsl"
+import "core:mem"
 
 import "./shaders"
 
@@ -13,6 +14,7 @@ Particle_System :: struct {
     time: f32,
     emitters: []Emitter,
 }
+
 
 Emitter :: struct {
     active: bool,
@@ -41,8 +43,26 @@ Emitter :: struct {
     time_scale:        f32,
 }
 
+DynamicEmitter :: struct {
+    using base: Emitter,
+    particles: []Particle,
+    rate:      f32, // how often to spawn a particle
+    // TODO: maybe use a ring buffer or something?
+}
 
-init_particles :: proc() -> Particle_System {
+Particle :: struct {
+    pos: glsl.vec3,
+    rot: f32,
+    uv: glsl.vec2,
+    scale: f32,
+    atlas_index: f32,
+    color: u32,
+    active: bool,
+}
+
+init_particles :: proc(perm_allocator: mem.Allocator) -> Particle_System {
+    context.allocator = perm_allocator
+
     particle_system: Particle_System
 
     images := load_array_texture({
@@ -116,7 +136,6 @@ draw_particles :: proc(ps: ^Particle_System, cam: ^Camera, t: f32) {
     sg.apply_bindings(ps.bind)
 
     for e in ps.emitters {
-
         uniforms := shaders.Particle_Vs_Params {
             view              = transmute([16]f32)cam.view,
             proj              = transmute([16]f32)cam.proj,

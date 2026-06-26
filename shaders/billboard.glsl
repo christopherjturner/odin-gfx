@@ -10,16 +10,17 @@
 //-----------------------//
 @vs vs
 layout(binding=0) uniform billboard_params {
-    mat4 view_proj;
+    mat4 view;
+    mat4 proj;
     vec4 ambient_color;
 };
 
 // Per-vertex data (the shared quad)
-in vec4 pos; // vec4??
+in vec3 pos; // vec4??
 in vec2 uv;
 in vec3 inst_pos;
 in float inst_scale;
-in vec4 inst_color;
+in vec3 inst_color;
 in float inst_layer;
 
 out vec4 color;
@@ -27,20 +28,20 @@ out vec2 texcoord;
 out float layer;
 
 void main() {
-    // Get the camera's Right and Up vectors from the view matrix
-    // This assumes a standard column-major view matrix
-    vec3 camera_right = vec3(view_proj[0][0], view_proj[1][0], view_proj[2][0]);
-    vec3 camera_up    = vec3(view_proj[0][1], view_proj[1][1], view_proj[2][1]);
+  vec3 right = normalize(vec3(view[0][0], view[1][0], view[2][0]));
+  vec3 up    = vec3(0, 1, 0);
 
-    // Calculate vertex position in world space
-    vec3 world_pos = inst_pos
-        + camera_right * pos.x * inst_scale
-        + camera_up    * pos.y * inst_scale;
+  vec3 local = pos * inst_scale;
 
-    gl_Position = view_proj * vec4(world_pos, 1.0);
-    texcoord = uv;
-    layer = inst_layer;
-    color = inst_color * ambient_color;
+  // Calculate vertex position in world space
+  vec3 world_pos = inst_pos +
+    right * local.x +
+    up    * local.y;
+
+  gl_Position = proj * view * vec4(world_pos, 1.0);
+  texcoord = uv;
+  layer = inst_layer;
+  color = vec4(inst_color, 1.0)  * ambient_color;
 }
 @end
 

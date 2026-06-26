@@ -112,7 +112,7 @@ init_terrain :: proc() -> Terrain_Renderer {
         }
     }
 
-    fmt.printf("\nloaded %d x %d map\n", img_w, img_h)
+    fmt.printfln("loaded %d x %d map", img_w, img_h)
 
     // Index
     i_idx := 0

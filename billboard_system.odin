@@ -15,7 +15,7 @@ Billboard_Vertex :: struct {
 Billboard_Instance :: struct {
     pos:   [3]f32,
     scale: f32,
-    color: [4]f32,
+    color: [3]f32,
     layer: f32,
 }
 
@@ -34,18 +34,11 @@ instance_buffer_desc := sg.Buffer_Desc{
     },
     label = "billboard-instance-buffer",
 }
-/*
-billboard_quad := [6]Billboard_Vertex{
-    {{-0.5, -0.5, 0.0}, {0, 0}}, {{ 0.5, -0.5, 0.0}, {1, 0}}, {{ 0.5,  0.5, 0.0}, {1, 1}},
-    {{-0.5, -0.5, 0.0}, {0, 0}}, {{ 0.5,  0.5, 0.0}, {1, 1}}, {{-0.5,  0.5, 0.0}, {0, 1}},
-}*/
-
 
 billboard_quad := [6]Billboard_Vertex{
-    {{0.0, 0.0, 0.0}, {0, 0}}, {{ 1.0, 0.0, 0.0}, {1, 0}}, {{ 1.0,  1.0, 0.0}, {1, 1}},
-    {{0.0, 0.0, 0.0}, {0, 0}}, {{ 1.0, 1.0, 0.0}, {1, 1}}, {{ 0.0,  1.0, 0.0}, {0, 1}},
+    {{-0.5, 0, 0.0}, {0, 0}}, {{ 0.5, 0, 0.0}, {1, 0}}, {{ 0.5,  1, 0.0}, {1, 1}},
+    {{-0.5, 0, 0.0}, {0, 0}}, {{ 0.5, 1, 0.0}, {1, 1}}, {{-0.5,  1, 0.0}, {0, 1}},
 }
-
 
 init_billboards :: proc() -> Billboard_Renderer {
     billboard: Billboard_Renderer
@@ -90,7 +83,7 @@ init_billboards :: proc() -> Billboard_Renderer {
                 shaders.ATTR_billboard_uv         = { buffer_index = 0, format = .FLOAT2 },
                 shaders.ATTR_billboard_inst_pos   = { buffer_index = 1, format = .FLOAT3 },
                 shaders.ATTR_billboard_inst_scale = { buffer_index = 1, format = .FLOAT  },
-                shaders.ATTR_billboard_inst_color = { buffer_index = 1, format = .FLOAT4 },
+                shaders.ATTR_billboard_inst_color = { buffer_index = 1, format = .FLOAT3 },
                 shaders.ATTR_billboard_inst_layer = { buffer_index = 1, format = .FLOAT  },
             },
         },
@@ -100,18 +93,18 @@ init_billboards :: proc() -> Billboard_Renderer {
         },
     })
 
-    push_billboard(&billboard, { {4, 0.0, 4}, 5.0, {1, 1, 1, 1}, 0 })
-    push_billboard(&billboard, { {-10, -10.0, 0}, 4.0, {1, 1, 1, 1}, 0 })
-    push_billboard(&billboard, { {-3, -10.0, 4}, 5.0, {1, 1, 1, 1}, 0 })
+    push_billboard(&billboard, { {4, 0.0, 4}, 20.0, {1, 1, 1}, 0 })
+    push_billboard(&billboard, { {-10, -10.0, 0}, 4.0, {1, 1, 1}, 0 })
+    push_billboard(&billboard, { {-3, -10.0, 4}, 5.0, {1, 1, 1}, 0 })
 
     return billboard
 }
 
 draw_billboards :: proc(bb: ^Billboard_Renderer, cam: ^Camera) {
-
     view_proj := get_view_proj(cam)
     uniforms := shaders.Billboard_Params{
-        view_proj     = transmute([16]f32)view_proj,
+        view          = transmute([16]f32)cam.view,
+        proj          = transmute([16]f32)cam.proj,
         ambient_color = state.sky.state.now.ambient_color,
     }
 

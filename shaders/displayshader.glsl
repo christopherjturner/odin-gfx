@@ -126,6 +126,10 @@ vec3 quantAndDither(vec3 color, vec2 srcPixel) {
 
 }
 
+float rgbToLum(vec3 color) {
+  return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
 void main() {
 
   vec2 srcSize = vec2(640.0, 480.0);
@@ -157,13 +161,15 @@ void main() {
   }
 
   // Colour pop
-  float luma = dot(color, vec3(0.299, 0.587, 0.114));
-  color = mix(vec3(luma), color, 1.115);
-  color = clamp(color, 0.0, 1.0);
+  //float luma = dot(color, vec3(0.299, 0.587, 0.114));
+  //color = mix(vec3(luma), color, 1.115);
+  //color = clamp(color, 0.0, 1.0);
+
 
   // looks very VGA, a bit too much?
   //color = quantize666(color, gl_FragCoord.xy);
   //color = quantize666(color, srcPixel.xy);
+
 
   //color = quantAndDither(color, srcPixel.xy);
   // Final Color

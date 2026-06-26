@@ -1,7 +1,11 @@
 package main
 
 import "core:fmt"
+import "core:math"
 import "core:math/linalg/glsl"
+import "core:mem"
+import "core:os"
+
 import "vendor:cgltf"
 
 import sg "./sokol/gfx"
@@ -11,23 +15,21 @@ MeshVert :: struct {
 	pos:     [3]f32,
 	uv:      [2]f32,
 	normal:  [3]f32,
+}
+
+AnimatedMeshVert :: struct {
+    using mesh: MeshVert,
 	joints:  [4]u32,
 	weights: [4]f32,
 }
 
-Mesh :: struct {
+AnimatedMesh :: struct {
 	vertex_buffer: sg.Buffer,
 	index_buffer:  sg.Buffer,
 	index_count:   i32,
 	skeleton:      Skeleton,
     animations:    []Animation,
     aabb:          AABB,
-}
-
-StaticMeshVert :: struct {
-	pos:     [3]f32,
-	uv:      [2]f32,
-	normal:  [3]f32,
 }
 
 StaticMesh :: struct {
@@ -77,9 +79,9 @@ AABB :: struct {
     max: [3]f32,
 }
 
-load_mesh :: proc(filename: cstring) -> ^Mesh {
+load_mesh :: proc(filename: cstring) -> ^AnimatedMesh {
 	options: cgltf.options
-	mesh := new(Mesh)
+	mesh := new(AnimatedMesh)
 
 	data, result := cgltf.parse_file(options, filename)
 	if result != .success {
@@ -127,7 +129,6 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
             // i.e. it points to itself
             mesh.skeleton.joints[i].parent = -1
         }
-        fmt.printfln("%d joint %s parented to %d", i, j.name, mesh.skeleton.joints[i].parent)
 	}
 
     // Load animations
@@ -148,8 +149,6 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
                 ani.tracks[joint_idx].translation_times  = make([]f32, c.sampler.input.count)
                 ani.tracks[joint_idx].translation_values = make([][3]f32, c.sampler.output.count)
                 ani.tracks[joint_idx].translation_linear = c.sampler.interpolation == .linear
-
-                fmt.printfln("Added %d tracks to joint %d", c.sampler.input.count, joint_idx)
 
                 for input_i in 0..<c.sampler.input.count {
 				    if !cgltf.accessor_read_float(c.sampler.input, input_i, &ani.tracks[joint_idx].translation_times[input_i], 1) {
@@ -208,21 +207,19 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
                 }
 			}
 		}
-        fmt.printfln("animation duration %f", ani.duration)
 	}
 
 
 	// load vert data
 	p := data.meshes[0].primitives[0]
 	count := cast(int)p.attributes[0].data.count
-	fmt.printf("%s: mesh 0 primative 0 attr count %d\n", filename, count)
 
-	verts := make([]MeshVert, count)
+	verts := make([]AnimatedMeshVert, count)
 	defer delete(verts)
 
     mesh.aabb = AABB {
-        min = { 999999, 999999, 999999 },
-        max = { -999999, -999999, -999999 },
+        min = { math.F32_MAX, math.F32_MAX, math.F32_MAX },
+        max = { math.F32_MIN, math.F32_MIN, math.F32_MIN },
     }
 
 	for i in 0 ..< count {
@@ -264,13 +261,13 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 			}
 		}
 	}
-    fmt.printfln("mesh aabb %v", mesh.aabb)
+
     // load vertex buffer
 	mesh.vertex_buffer = sg.make_buffer({
         usage = { vertex_buffer = true, immutable = true },
         data = {
-            ptr = raw_data(verts),
-            size =len(verts) * size_of(MeshVert),
+            ptr  = raw_data(verts),
+            size = len(verts) * size_of(AnimatedMeshVert),
         }
     })
 
@@ -286,16 +283,21 @@ load_mesh :: proc(filename: cstring) -> ^Mesh {
 	mesh.index_buffer = sg.make_buffer({
 		usage = { index_buffer = true, immutable = true },
 		data = {
-            ptr = raw_data(unpacked_indices),
+            ptr  = raw_data(unpacked_indices),
             size = len(unpacked_indices) * size_of(u16)
         },
 	})
 
 	mesh.index_count = index_count
 
+    fmt.printfln("Loaded animated mesh: %s", filename)
+    fmt.printfln("\tVertex count: %d", len(verts))
+    fmt.printfln("\tIndex: %d", len(unpacked_indices))
+    fmt.printfln("\tJoints: %d", len(mesh.skeleton.joints))
+    fmt.printfln("\tAnimations: %d", len(mesh.animations))
+
 	return mesh
 }
-
 
 load_static_mesh :: proc(filename: cstring) -> ^StaticMesh {
 	options: cgltf.options
@@ -313,74 +315,207 @@ load_static_mesh :: proc(filename: cstring) -> ^StaticMesh {
 		panic("failed to load buffers")
 	}
 
-	p := data.meshes[0].primitives[0]
-	count := cast(int)p.attributes[0].data.count
-	fmt.printf("%s: static mesh 0 primative 0 attr count %d\n", filename, count)
+    vert_count := 0
+    index_count : i32
 
-	verts := make([]StaticMeshVert, count)
+    for m in data.meshes {
+        vert_count += cast(int)m.primitives[0].attributes[0].data.count
+        index_count += cast(i32)m.primitives[0].indices.count
+    }
+
+    if vert_count == 0 {
+        panic("mesh has no verts!!")
+    }
+
+	verts := make([]MeshVert, vert_count)
 	defer delete(verts)
+
+	unpacked_indices := make([]u16, index_count) // Or u32 if your models are large
+	defer delete(unpacked_indices)
+
 
     mesh.aabb = AABB {
         max = { -999999, -999999, -999999 },
         min = {  999999,  999999,  999999 },
     }
 
-	for i in 0 ..< count {
-		v := &verts[i]
+    vert_offset: uint
+    index_offset: uint
 
-		for a in p.attributes {
-			#partial switch a.type {
-			case .position:
-				ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.pos[0], 3)
-				if !ok {
-					panic("failed to read verts")
-				}
-                mesh.aabb.min = { min(mesh.aabb.min[0], v.pos[0]), min(mesh.aabb.min[1], v.pos[1]), min(mesh.aabb.min[2], v.pos[2]) }
-                mesh.aabb.max = { max(mesh.aabb.max[0], v.pos[0]), max(mesh.aabb.max[1], v.pos[1]), max(mesh.aabb.max[2], v.pos[2]) }
-			case .texcoord:
-				if a.index == 0 {
- 	                // limited to 1 set of uvs
-					ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.uv[0], 2)
-					if !ok {
-						panic("failed to read verts")
-					}
-				}
-			case .normal:
-				ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.normal[0], 3)
-				if !ok {
-					panic("failed to read verts")
-				}
-			}
-		}
-	}
+    for m in data.meshes {
+        p :=  m.primitives[0]
+        local_count := p.attributes[0].data.count
+        for i in 0 ..< local_count {
+		    v := &verts[vert_offset + i]
+
+		    for a in p.attributes {
+			    #partial switch a.type {
+			        case .position:
+				    ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.pos[0], 3)
+				    if !ok {
+					    panic("failed to read verts")
+				    }
+                    mesh.aabb.min = {
+                        min(mesh.aabb.min[0], v.pos[0]),
+                        min(mesh.aabb.min[1], v.pos[1]),
+                        min(mesh.aabb.min[2], v.pos[2])
+                    }
+                    mesh.aabb.max = {
+                        max(mesh.aabb.max[0], v.pos[0]),
+                        max(mesh.aabb.max[1], v.pos[1]),
+                        max(mesh.aabb.max[2], v.pos[2])
+                    }
+			        case .texcoord:
+				    if a.index == 0 {
+ 	                    // limited to 1 set of uvs
+					    ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.uv[0], 2)
+					    if !ok {
+						    panic("failed to read verts")
+					    }
+				    }
+			        case .normal:
+				    ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.normal[0], 3)
+				    if !ok {
+					    panic("failed to read verts")
+				    }
+			    }
+		    }
+	    }
+
+        local_index_count := p.indices.count
+        for i in 0 ..< local_index_count {
+            unpacked_indices[index_offset + i] =  cast(u16)vert_offset + cast(u16)cgltf.accessor_read_index(p.indices, cast(uint)i)
+	    }
+
+        vert_offset += local_count
+        index_offset += local_index_count
+
+    }
 
     // load vertex buffer
 	mesh.vertex_buffer = sg.make_buffer({
         usage = { vertex_buffer = true, immutable = true },
         data = {
-            ptr = raw_data(verts),
-            size =len(verts) * size_of(MeshVert),
+            ptr  = raw_data(verts),
+            size = len(verts) * size_of(MeshVert),
         }
     })
-
-	index_count := cast(i32)p.indices.count
-	unpacked_indices := make([]u16, index_count) // Or u32 if your models are large
-	defer delete(unpacked_indices)
-
-	for i in 0 ..< index_count {
-		unpacked_indices[i] = cast(u16)cgltf.accessor_read_index(p.indices, cast(uint)i)
-	}
 
 	// load index buffer
 	mesh.index_buffer = sg.make_buffer({
 		usage = { index_buffer = true, immutable = true },
 		data = {
-            ptr = raw_data(unpacked_indices),
+            ptr  = raw_data(unpacked_indices),
             size = len(unpacked_indices) * size_of(u16)
         },
 	})
 
 	mesh.index_count = index_count
 
+    fmt.printfln("Loaded static mesh: %s", filename)
+    fmt.printfln("\tVertex count: %d", len(verts))
+    fmt.printfln("\tIndex: %d", len(unpacked_indices))
+
 	return mesh
+}
+
+
+// TODO: remove/refactor
+dump_skydome :: proc() -> (vertices: []Sky_Vertex, indices: []u16) {
+
+    options: cgltf.options
+
+	mesh := new(StaticMesh)
+
+    filename := cstring("./assets/meshes/skydome.glb")
+	data, result := cgltf.parse_file(options, filename)
+	if result != .success {
+		panic("failed to load model")
+	}
+
+	defer cgltf.free(data)
+
+	res := cgltf.load_buffers(options, data, filename)
+	if res != .success {
+		panic("failed to load buffers")
+	}
+
+    vert_count := 0
+    index_count : i32
+
+    for m in data.meshes {
+
+        fmt.printfln("sky mesh, verts %v", m.primitives[0].attributes[0].data.count)
+        for attr in m.primitives[0].attributes {
+            fmt.printfln("sky mesh, verts %v", attr)
+        }
+
+        vert_count += cast(int)m.primitives[0].attributes[0].data.count
+        index_count += cast(i32)m.primitives[0].indices.count
+    }
+
+    if vert_count == 0 {
+        panic("mesh has no verts!!")
+    }
+
+	verts := make([]Sky_Vertex, vert_count)
+	unpacked_indices := make([]u16, index_count) // Or u32 if your models are large
+
+    vert_offset: uint
+    index_offset: uint
+
+    for m in data.meshes {
+        p :=  m.primitives[0]
+        local_count := p.attributes[0].data.count
+        for i in 0 ..< local_count {
+		    v := &verts[vert_offset + i]
+
+		    for a in p.attributes {
+			    #partial switch a.type {
+			        case .position:
+				    ok := cgltf.accessor_read_float(a.data, cast(uint)i, &v.pos[0], 3)
+				    if !ok {
+					    panic("failed to read verts")
+				    }
+			    }
+		    }
+	    }
+
+        local_index_count := p.indices.count
+
+        for i in 0 ..< local_index_count {
+		    unpacked_indices[index_offset + i] =  cast(u16)vert_offset + cast(u16)cgltf.accessor_read_index(p.indices, cast(uint)i)
+	    }
+
+        vert_offset += local_count
+        index_offset += local_index_count
+    }
+
+    fmt.printfln("sky %d %d", len(verts), len(unpacked_indices))
+    return verts, unpacked_indices
+}
+
+SkyHeader :: struct {
+    magic: [4]u8,
+    vert_count: int,
+    index_count: int,
+}
+
+save_skydome :: proc(verts: []Sky_Vertex, indices: []u16) {
+
+    file, err := os.open("assets/meshes/sky.bin", os.O_WRONLY | os.O_CREATE | os.O_TRUNC)
+    if err != nil {
+        panic(os.error_string(err))
+    }
+    defer os.close(file)
+
+    header := SkyHeader {
+        magic = { 0xCA, 0xFE, 0xEF, 0xAC },
+        vert_count = len(verts),
+        index_count = len(indices),
+    }
+
+    os.write(file, mem.any_to_bytes(header))
+    os.write(file, mem.slice_to_bytes(verts))
+    os.write(file, mem.slice_to_bytes(indices))
 }

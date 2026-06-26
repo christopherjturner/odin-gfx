@@ -58,7 +58,7 @@ init_stars :: proc() -> Star_Renderer {
 
     stars.bind.vertex_buffers[1] = sg.make_buffer(star_instance_buffer_desc)
 
-    stars.instances[0] = Billboard_Instance {{0,0,0,},30,{ 1, 1, 1, 1 },0,}
+    stars.instances[0] = Billboard_Instance {{0,0,0,}, 30, {1,1,1}, 0}
     stars.active = 1
 
     stars.pip = sg.make_pipeline({
@@ -99,16 +99,15 @@ init_stars :: proc() -> Star_Renderer {
 update_sun :: proc(stars: ^Star_Renderer, sky: Sky_State) {
     angle := (state.world.time_of_day - 0.25) * 2.0 * math.PI
     stars.instances[0].pos = { math.cos(angle), math.sin(angle), 0.1 }
-    stars.instances[0].color = sky.now.sun_color
+    stars.instances[0].color = sky.now.sun_color.rgb
 }
 
 add_star :: proc(stars: ^Star_Renderer, cam: ^Camera) {
     stars.instances[stars.active].pos = cam.front
     stars.instances[stars.active].scale = rand.float32_range(1.0, 4.0)
     col := rand.float32_range(0.3, 1.0)
-    stars.instances[stars.active].color = { col, col, col, 0.6 }
+    stars.instances[stars.active].color = { col, col, col }
     stars.instances[stars.active].layer = 1
-
 
     stars.active += 1
     fmt.printf("Adding star %v\n", stars.instances[stars.active].pos)

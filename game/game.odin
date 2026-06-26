@@ -4,6 +4,7 @@ MAX_ENTITIES :: 1024
 
 import "core:math/linalg/glsl"
 
+
 Spherical :: struct {
     radius: f32
 }
@@ -63,7 +64,6 @@ EntityState :: struct {
 
 Movement :: struct {
     vel: glsl.vec3,
-    
 }
 
 GameState :: struct {
