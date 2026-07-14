@@ -82,8 +82,12 @@ init_stars :: proc() -> Star_Renderer {
             0 = {
                 blend = {
                     enabled = true,
-                    src_factor_rgb   = .SRC_ALPHA,
-                    dst_factor_rgb   = .ONE_MINUS_SRC_ALPHA,
+                    src_factor_rgb   = .ONE,
+                    dst_factor_rgb   = .ONE,
+                    op_rgb           = .ADD,
+                    src_factor_alpha = .ZERO,
+                    dst_factor_alpha = .ONE,
+                    op_alpha         = .ADD
                 }
             }
         },
@@ -132,7 +136,5 @@ draw_stars :: proc(stars : ^Star_Renderer, cam: ^Camera, time_of_day: f32) {
         size = size_of(stars.instances),
     })
 
-    sg.apply_pipeline(stars.pip)
-    sg.apply_bindings(stars.bind)
     sg.draw(0, 6, stars.active)
 }

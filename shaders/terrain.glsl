@@ -30,9 +30,6 @@ out vec3 v_normal;
 out vec2 v_uv;
 out vec3 v_fog_color;
 out float v_fog;
-
-//const float u_fog_start = 80;
-//const float u_fog_end = 250;
 const float texture_tiling = 2.0;
 
 void main() {
@@ -54,7 +51,7 @@ void main() {
   float dist  = distance(world_pos, u_camera_pos);
   v_fog       = clamp((u_fog_end - dist) / (u_fog_end - u_fog_start), 0.0, 1.0);
   v_fog_color = fog_color.rgb;
- 
+
   // 4. Set outputs
   v_uv = vec2(local_pos.x, local_pos.z) * texture_tiling;
   v_world_pos = world_pos;
@@ -101,7 +98,7 @@ void main() {
   float diff   = max(dot(normal, sun_dir), 0.0);
 
   // 3. Final Color (Green terrain)
-  vec3 ambient = f_ambient.rgb; //vec3(0.1, 0.15, 0.1);
+  vec3 ambient = f_ambient.rgb;
   vec3 terrain_color = f_col.rgb;
 
   // TODO: pass sun and direction in as a

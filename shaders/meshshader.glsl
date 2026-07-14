@@ -23,6 +23,8 @@ layout(location = 4) in vec4 weights;
 out vec2 v_uv;
 out vec3 v_normal;
 out vec4 v_col;
+out vec3 v_fog_color;
+out float v_fog;
 
 void main() {
   mat4 skin =
@@ -44,6 +46,9 @@ void main() {
   float diff = max(dot(normalize(v_normal), u_sun_dir), 0.0);
   vec3 lighting = ambient_color.rgb + (diff * sun_color.rgb);
   v_col = vec4(lighting, 1.0);
+
+  v_fog_color = vec3(1.0, 1.0, 1.0);
+  v_fog = 1.0;
 }
 
 @end
@@ -55,7 +60,11 @@ layout(binding = 0) uniform static_mesh_vs_params {
     mat4 model;
     vec4 ambient_color;
     vec4 sun_color;
+    vec4 u_fog_color;
     vec3 u_sun_dir;
+    float u_fog_start;
+    vec3 u_camera_pos;
+    float u_fog_end;
 };
 
 layout(location = 0) in vec3 position;
@@ -65,6 +74,8 @@ layout(location = 2) in vec3 normal;
 out vec2 v_uv;
 out vec3 v_normal;
 out vec4 v_col;
+out vec3 v_fog_color;
+out float v_fog;
 
 void main() {
 
@@ -73,12 +84,17 @@ void main() {
   gl_Position    = view_proj * world_pos;
 
   v_normal = mat3(model) * normal;
-  v_uv = vec2(texcoord0.x, texcoord0.y);
+  v_uv     = vec2(texcoord0.x, texcoord0.y);
 
   // Light
-  float diff = max(dot(normalize(v_normal), u_sun_dir), 0.0);
+  float diff    = max(dot(normalize(v_normal), u_sun_dir), 0.0);
   vec3 lighting = ambient_color.rgb + (diff * sun_color.rgb);
-  v_col = vec4(lighting, 1.0);
+  v_col         = vec4(lighting, 1.0);
+
+  // Fog
+  float dist  = distance(world_pos.xyz, u_camera_pos);
+  v_fog       = clamp((u_fog_end - dist) / (u_fog_end - u_fog_start), 0.0, 1.0);
+  v_fog_color = u_fog_color.rgb;
 }
 
 @end
@@ -87,6 +103,8 @@ void main() {
 in vec2 v_uv;
 in vec3 v_normal;
 in vec4 v_col;
+in vec3  v_fog_color;
+in float v_fog;
 
 layout(binding = 0) uniform texture2D mesh_tex;
 layout(binding = 0) uniform sampler mesh_smp;
@@ -96,6 +114,7 @@ out vec4 frag_color;
 void main() {
     vec4 tex_color = texture(sampler2D(mesh_tex, mesh_smp), v_uv);
     frag_color = tex_color * v_col;
+    frag_color.rgb = mix(frag_color.rgb, v_fog_color, 1.0-v_fog).rgb;
 }
 @end
 

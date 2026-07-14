@@ -179,9 +179,15 @@ draw_static_meshes :: proc(static_mesh_renderer: ^Static_Mesh_Renderer, camera: 
 	vs_params := shaders.Static_Mesh_Vs_Params {
 		view_proj     = transmute([16]f32)view_proj,
 		model         = transmute([16]f32)model_mat,
+		u_camera_pos  = camera.position,
+
 		ambient_color = state.sky.state.now.ambient_color,
 		sun_color     = state.sky.state.now.sun_color, // * state.sky.state.now.sun_intensity,
 		u_sun_dir     = state.sky.state.sun_dir,
+		u_fog_color   = state.sky.state.now.horizon_color,
+		u_fog_start   = state.world.fog_start,
+		u_fog_end     = state.world.fog_end,
+
 	}
 	sg.apply_uniforms(
 		shaders.UB_static_mesh_vs_params,
