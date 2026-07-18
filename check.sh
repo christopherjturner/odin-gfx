@@ -18,6 +18,7 @@ shaders=(
   gameuishader
   aabbshader
   particles
+  cpuparticles
 )
 
 compile_shader() {
