@@ -3,7 +3,13 @@
 
 @vs vs
 
-const int MAX_JOINTS = 64;
+struct instanceData {
+    mat4 skin;
+};
+
+layout(binding = 1, std430) readonly buffer TransformBuffer {
+    instanceData instance[];
+};
 
 layout(binding = 0) uniform mesh_vs_params {
     mat4 view_proj;
@@ -11,7 +17,6 @@ layout(binding = 0) uniform mesh_vs_params {
     vec4 ambient_color;
     vec4 sun_color;
     vec3 u_sun_dir;
-    mat4 u_joints[MAX_JOINTS];
 };
 
 layout(location = 0) in vec3 position;
@@ -28,17 +33,18 @@ out float v_fog;
 
 void main() {
   mat4 skin =
-        weights.x * u_joints[joints.x] +
-        weights.y * u_joints[joints.y] +
-        weights.z * u_joints[joints.z] +
-        weights.w * u_joints[joints.w];
+        weights.x * instance[int(joints.x)].skin +
+        weights.y * instance[joints.y].skin +
+        weights.z * instance[joints.z].skin +
+        weights.w * instance[joints.w].skin;
 
   vec4 local_pos = skin * vec4(position, 1.0);
   vec4 world_pos = model * local_pos;
   gl_Position = view_proj * world_pos;
 
   // Transform normal to world space (simple version)
-  v_normal = mat3(model) * normal;
+  // TODO: apply the skin transform too
+  v_normal = mat3(model) * mat3(skin) * normal;
 
   v_uv = vec2(texcoord0.x, texcoord0.y);
 

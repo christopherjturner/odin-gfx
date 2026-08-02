@@ -5,6 +5,26 @@ import "core:math/linalg/glsl"
 import "./shaders"
 import sg "./sokol/gfx"
 
+/*
+mesh:
+   	points to offsets in the megabuffer
+    points at texture/offset id
+    holds the animation data.
+    has an unique id per mesh.
+
+mesh instance:
+	mesh_id:
+	transform
+	animator instance:
+		animation state (frame time, active frame etc)
+		offset + len in pose buffer
+
+textures:
+	points at a texture view
+	can be an array texture
+*/
+
+
 // Animated meshes
 
 AnimatedModel :: struct {
@@ -41,7 +61,7 @@ Static_Mesh_Renderer :: struct {
 MegaBuffer :: struct {
 	vertex_buffer: sg.Buffer,
 	index_buffer:  sg.Buffer,
-	meshes:        struct {
+	meshes:        []struct {
 		id:            int,
 		vertex_offset: int,
 		vertex_count:  int,
@@ -59,49 +79,54 @@ init_meshes :: proc() -> Mesh_Renderer {
 
 	// TODO: dynamically load the mesh_renderer from data.
 	// TODO: pack all the mesh_renderer into a single vertex bufffer.
-	mesh := load_mesh("./assets/meshes/pigeon1.glb")
-
-	mesh_renderer.bind.vertex_buffers[0] = mesh.vertex_buffer
-	mesh_renderer.bind.index_buffer = mesh.index_buffer
-
+	mesh := load_animated_mesh("./assets/meshes/pigeon1.glb")
 	mesh_renderer.models[0].mesh = mesh
-
 	mesh_renderer.models[0].animator = init_animator(mesh, context.allocator)
-
 	mesh_renderer.models[0].transform.pos = {3, 4, 3}
 	mesh_renderer.models[0].transform.rot = quaternion(w = 1, x = 0, y = 0, z = 0)
 	mesh_renderer.models[0].transform.scale = {0.1, 0.1, 0.1}
 
-	shader := sg.make_shader(shaders.meshshader_shader_desc(sg.query_backend()))
-	mesh_renderer.pip = sg.make_pipeline(
-	{
-		shader = shader,
-		layout = {
-			attrs = {
-				shaders.ATTR_meshshader_position = {format = .FLOAT3},
-				shaders.ATTR_meshshader_texcoord0 = {format = .FLOAT2},
-				shaders.ATTR_meshshader_normal = {format = .FLOAT3},
-				shaders.ATTR_meshshader_joints = {format = .UINT4},
-				shaders.ATTR_meshshader_weights = {format = .FLOAT4},
-			},
-		},
-		index_type = .UINT16,
-		face_winding = .CCW, // gltf vs sokol quirk
-		cull_mode = .BACK,
-		depth = {compare = .LESS_EQUAL, write_enabled = true},
-	},
+	// Bind the buffers
+	mesh_renderer.bind.vertex_buffers[0] = mesh.vertex_buffer
+	mesh_renderer.bind.index_buffer = mesh.index_buffer
+
+	// Load the animations into the transform buffer.
+	// TODO: technically this needs to happen on a per-instance basis but we still need to work that out
+	mesh_renderer.bind.views[shaders.VIEW_TransformBuffer] = sg.make_view(
+		{storage_buffer = {buffer = mesh_renderer.models[0].animator.skin_mats_buffer}},
 	)
 
-	texture := load_texture("./assets/meshes/pigeon1/textures/my_67_baseColor.png")
+	// TODO: generalize texture loading
+	texture := get_texture(&state.textures, "./assets/meshes/pigeon1/textures/my_67_baseColor.png")
 	mesh_renderer.bind.views[shaders.VIEW_mesh_tex] = sg.make_view({texture = {image = texture}})
-
 	mesh_renderer.bind.samplers[shaders.SMP_mesh_smp] = sg.make_sampler({})
+
+	shader := sg.make_shader(shaders.meshshader_shader_desc(sg.query_backend()))
+	mesh_renderer.pip = sg.make_pipeline(
+		{
+			shader = shader,
+			layout = {
+				attrs = {
+					shaders.ATTR_meshshader_position = {format = .FLOAT3},
+					shaders.ATTR_meshshader_texcoord0 = {format = .FLOAT2},
+					shaders.ATTR_meshshader_normal = {format = .FLOAT3},
+					shaders.ATTR_meshshader_joints = {format = .UINT4},
+					shaders.ATTR_meshshader_weights = {format = .FLOAT4},
+				},
+			},
+			index_type = .UINT16,
+			face_winding = .CCW, // gltf vs sokol quirk
+			cull_mode = .BACK,
+			depth = {compare = .LESS_EQUAL, write_enabled = true},
+		},
+	)
+
 	return mesh_renderer
 }
 
 
 // TODO: manage a list of active mesh_renderer and draw all of the in one go.
-draw_meshes :: proc(mesh_renderer: ^Mesh_Renderer, camera: ^Camera, dt: f32) {
+draw_animated_meshes :: proc(mesh_renderer: ^Mesh_Renderer, camera: ^Camera, dt: f32) {
 	sg.apply_pipeline(mesh_renderer.pip)
 	sg.apply_bindings(mesh_renderer.bind)
 
@@ -110,15 +135,14 @@ draw_meshes :: proc(mesh_renderer: ^Mesh_Renderer, camera: ^Camera, dt: f32) {
 
 	update_animation(&mesh_renderer.models[0], dt)
 
-	vs_params := shaders.Mesh_Vs_Params {
+	vs_uniforms := shaders.Mesh_Vs_Params {
 		view_proj     = transmute([16]f32)view_proj,
 		model         = transmute([16]f32)model_mat,
 		ambient_color = state.sky.state.now.ambient_color,
 		sun_color     = state.sky.state.now.sun_color, // * state.sky.state.now.sun_intensity,
 		u_sun_dir     = state.sky.state.sun_dir,
-		u_joints      = transmute([64][16]f32)mesh_renderer.models[0].animator.skin_mats,
 	}
-	sg.apply_uniforms(shaders.UB_mesh_vs_params, {ptr = &vs_params, size = size_of(vs_params)})
+	sg.apply_uniforms(shaders.UB_mesh_vs_params, {ptr = &vs_uniforms, size = size_of(vs_uniforms)})
 	sg.draw(0, mesh_renderer.models[0].mesh.index_count, 1)
 	add_aabb(state.aabb, mesh_renderer.models[0].mesh.aabb, mesh_renderer.models[0].transform)
 }
@@ -130,7 +154,7 @@ init_static_meshes :: proc() -> Static_Mesh_Renderer {
 	// TODO: dynamically load the mesh_renderer from data.
 	// TODO: pack all the mesh_renderer into a single vertex bufffer.
 	mesh := load_static_mesh("./assets/meshes/test1.glb")
-	texture := load_texture("./assets/grass.png")
+	texture := get_texture(&state.textures, "./assets/grass.png")
 
 	static_mesh_renderer.bind.vertex_buffers[0] = mesh.vertex_buffer
 	static_mesh_renderer.bind.index_buffer = mesh.index_buffer
@@ -180,14 +204,12 @@ draw_static_meshes :: proc(static_mesh_renderer: ^Static_Mesh_Renderer, camera: 
 		view_proj     = transmute([16]f32)view_proj,
 		model         = transmute([16]f32)model_mat,
 		u_camera_pos  = camera.position,
-
 		ambient_color = state.sky.state.now.ambient_color,
 		sun_color     = state.sky.state.now.sun_color, // * state.sky.state.now.sun_intensity,
 		u_sun_dir     = state.sky.state.sun_dir,
 		u_fog_color   = state.sky.state.now.horizon_color,
 		u_fog_start   = state.world.fog_start,
 		u_fog_end     = state.world.fog_end,
-
 	}
 	sg.apply_uniforms(
 		shaders.UB_static_mesh_vs_params,

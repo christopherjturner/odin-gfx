@@ -43,13 +43,7 @@ init_particles :: proc(perm_allocator: mem.Allocator) -> Gpu_Particle_System {
 
 	particle_system: Gpu_Particle_System
 
-	images := load_array_texture(
-		{
-			"./assets/textures/array/1star.png",
-			"./assets/textures/array/2star.png",
-			"./assets/textures/array/3star.png",
-		},
-	)
+	images := get_array_texture(&state.textures, "./assets/textures/array")
 
 	particle_system.bind.views[shaders.VIEW_tex] = sg.make_view(
 		{texture = {image = images, slices = {base = 0, count = 0}}},

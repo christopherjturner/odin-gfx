@@ -33,11 +33,7 @@ init_stars :: proc() -> Star_Renderer {
     stars: Star_Renderer
 
     // load star texture(s)
-    images := load_array_texture({
-        "./assets/textures/array/1star.png",
-        "./assets/textures/array/2star.png",
-        "./assets/textures/array/3star.png",
-    })
+    images := get_array_texture(&state.textures, "./assets/textures/array")
 
     stars.bind.views[shaders.VIEW_tex] = sg.make_view({
         texture = {

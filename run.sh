@@ -16,6 +16,7 @@ shaders=(
   gameuishader
   aabbshader
   particles
+  decalshader
 )
 
 compile_shader() {

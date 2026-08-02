@@ -28,3 +28,27 @@ check_aabb_sphere :: proc(a: AABB, b: Sphere) {
 check_sphere_sphere :: proc(a: Sphere, b: Sphere) -> bool {
 	return glsl.distance_vec3(a.pos, b.pos) < a.radius + b.radius
 }
+
+aabb_transform_fast :: proc(local_aabb: AABB, model_matrix: glsl.mat4) -> AABB {
+	// Start the world bounds using the translation component (column 3 of the matrix)
+	world_min := model_matrix[3].xyz
+	world_max := model_matrix[3].xyz
+
+	// Loop through rows/columns to project local bounds onto world axes
+	for i in 0 ..< 3 {
+		for j in 0 ..< 3 {
+			a := model_matrix[j][i] * local_aabb.min[j]
+			b := model_matrix[j][i] * local_aabb.max[j]
+
+			if a < b {
+				world_min[i] += a
+				world_max[i] += b
+			} else {
+				world_min[i] += b
+				world_max[i] += a
+			}
+		}
+	}
+
+	return AABB{min = world_min, max = world_max}
+}

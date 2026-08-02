@@ -118,6 +118,45 @@ unit_cube_indices := [24]u16 {
 	7, // Vertical pillars
 }
 
+full_cube_indices := [36]u16 {
+	0,
+	1,
+	2,
+	2,
+	3,
+	0, // front
+	4,
+	5,
+	6,
+	6,
+	7,
+	4, // back
+	4,
+	0,
+	3,
+	3,
+	7,
+	4, // left
+	1,
+	5,
+	6,
+	6,
+	2,
+	1, // right
+	3,
+	2,
+	6,
+	6,
+	7,
+	3, // top
+	4,
+	5,
+	1,
+	1,
+	0,
+	4, // bottom
+}
+
 init_aabb_renderer :: proc() -> ^AABB_Debug_Renderer {
 	aabb_debug_renderer := new(AABB_Debug_Renderer)
 
@@ -206,8 +245,8 @@ add_aabb :: proc(aabb_renderer: ^AABB_Debug_Renderer, box: AABB, transform: Tran
 	instance := AABB_Instance {
 		aabb_min = aabb.min,
 		aabb_max = aabb.max,
-		pos      = glsl.vec3{0,0,0},
-		scale    = glsl.vec3{1,1,1},
+		pos      = glsl.vec3{0, 0, 0},
+		scale    = glsl.vec3{1, 1, 1},
 	}
 	append(&aabb_renderer.instances, instance)
 }

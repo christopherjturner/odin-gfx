@@ -1,6 +1,8 @@
 package main
 
+
 import "core:fmt"
+import "core:math/rand"
 
 import sg "./sokol/gfx"
 import "./shaders"
@@ -43,12 +45,7 @@ billboard_quad := [6]Billboard_Vertex{
 init_billboards :: proc() -> Billboard_Renderer {
     billboard: Billboard_Renderer
 
-    images := load_array_texture({
-        "./assets/textures/tree1.png",
-        "./assets/textures/tree2.png",
-        "./assets/textures/tree3.png",
-    })
-
+    images := get_array_texture(&state.textures, "./assets/textures/trees")
 
     billboard.bind.views[shaders.VIEW_tex] = sg.make_view({
         texture = {
@@ -93,9 +90,15 @@ init_billboards :: proc() -> Billboard_Renderer {
         },
     })
 
-    push_billboard(&billboard, { {4, 0.0, 4}, 20.0, {1, 1, 1}, 0 })
-    push_billboard(&billboard, { {-10, -10.0, 0}, 4.0, {1, 1, 1}, 0 })
-    push_billboard(&billboard, { {-3, -10.0, 4}, 5.0, {1, 1, 1}, 0 })
+
+    for i in 0..<MAX_BILLBOARDS {
+   		x := rand.float32_range(-320, 320)
+    	z := rand.float32_range(-320, 320)
+     	y := get_terrain_height(&state.terrain, x, z)
+      	scale := rand.float32_range(15, 30)
+        texture := f32(i % 3)
+    	push_billboard(&billboard, { {x,y,z}, scale, {1, 1, 1}, texture })
+    }
 
     return billboard
 }

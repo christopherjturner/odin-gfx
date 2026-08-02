@@ -69,7 +69,7 @@ init_sky :: proc() -> Sky_Renderer {
     })
 
     // Load noise texture
-    noise_texture := load_texture("./assets/textures/noise.png")
+    noise_texture := get_texture(&state.textures, "./assets/textures/noise.png")
 
     sky.bind.views[shaders.VIEW_sky_tex] = sg.make_view({
         texture = {

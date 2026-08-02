@@ -38,7 +38,7 @@ init_terrain :: proc() -> Terrain_Renderer {
 
 
     // Load the texture map
-    grass_texture := load_texture("./assets/grass.png")
+    grass_texture := get_texture(&state.textures, "./assets/grass.png")
 
     terrain.bind.views[shaders.VIEW_trtex] = sg.make_view({
         texture = {
@@ -48,6 +48,8 @@ init_terrain :: proc() -> Terrain_Renderer {
 
     terrain.bind.samplers[shaders.SMP_trsmp] = sg.make_sampler({})
 
+
+    // TODO: break this out into its own function maybe? Possibly the highmap system manages chunks/lod/etc
     // load the hightmap from file
     img_w, img_h, t_chan: i32
     pixels := img.load("./assets/map.png", &img_w, &img_h, &t_chan, 4)

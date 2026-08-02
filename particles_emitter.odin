@@ -77,19 +77,13 @@ Particle_System :: struct {
 init_particle_system :: proc() -> ^Particle_System {
 
 	ps := new(Particle_System)
-
- 	images := load_array_texture({
-        "./assets/textures/array/1star.png",
-        "./assets/textures/array/2star.png",
-        "./assets/textures/array/3star.png",
-    })
-
-  ps.bind.views[shaders.VIEW_cpuparticletex] = sg.make_view({
-      texture = {
+	images := get_array_texture(&state.textures, "./assets/textures/array")
+  	ps.bind.views[shaders.VIEW_cpuparticletex] = sg.make_view({
+   		texture = {
           image  = images,
           slices = { base = 0, count = 0 },
-      }
-  	})
+     	}
+    })
 
   ps.bind.samplers[shaders.SMP_cpuparticlesmp] = sg.make_sampler({})
 

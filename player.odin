@@ -11,7 +11,7 @@ Player :: struct {
 	pitch:    f32,
 	speed:    f32,
 	collide:  bool,
-	vel:      glsl.vec3
+	vel:      glsl.vec3,
 }
 
 

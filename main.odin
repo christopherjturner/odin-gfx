@@ -2,9 +2,10 @@ package main
 
 import "base:runtime"
 import "core:fmt"
-import "core:mem"
-import "core:math/rand"
 import "core:math/linalg/glsl"
+import "core:math/rand"
+import "core:mem"
+import "core:path/slashpath"
 
 
 import sg "./sokol/gfx"
@@ -14,7 +15,6 @@ import slog "./sokol/log"
 import sapp "./sokol/app"
 import sdtx "./sokol/debugtext"
 import sglue "./sokol/glue"
-
 
 
 import "./shaders"
@@ -39,41 +39,48 @@ allocs: struct {
 }
 
 state: struct {
-	offscreen:     struct {
+	offscreen:       struct {
 		pass: sg.Pass,
 		pip:  sg.Pipeline,
 		bind: sg.Bindings,
 	},
-	display:       struct {
+	offscreen_decal: struct {
+		pass: sg.Pass,
+		pip:  sg.Pipeline,
+		bind: sg.Bindings,
+	},
+	display:         struct {
 		pass: sg.Pass_Action,
 		pip:  sg.Pipeline,
 		bind: sg.Bindings,
 	},
-	grid:          struct {
+	grid:            struct {
 		pip:   sg.Pipeline,
 		bind:  sg.Bindings,
 		count: i32,
 	},
-	aabb:          ^AABB_Debug_Renderer,
-	world:         struct {
+	aabb:            ^AABB_Debug_Renderer,
+	world:           struct {
 		game_time:       f32,
 		time_of_day:     f32,
 		time_multiplier: f32,
 		fog_start:       f32,
 		fog_end:         f32,
 	},
-	static_meshes: Static_Mesh_Renderer,
-	meshes:        Mesh_Renderer,
-	sky:           Sky_Renderer,
-	stars:         Star_Renderer,
-	billboards:    Billboard_Renderer,
-	terrain:       Terrain_Renderer,
-	particles:     ^Particle_System,
-	game_ui:       ^Game_UI,
-	camera:        Camera,
-	debug_ui:      ^Debug_UI,
-	player:        Player,
-	input:         InputState,
+	textures:        Texture_Manager,
+	static_meshes:   Static_Mesh_Renderer,
+	meshes:          Mesh_Renderer,
+	sky:             Sky_Renderer,
+	stars:           Star_Renderer,
+	billboards:      Billboard_Renderer,
+	terrain:         Terrain_Renderer,
+	particles:       ^Particle_System,
+	decals:          Decal_Render,
+	game_ui:         ^Game_UI,
+	camera:          Camera,
+	debug_ui:        ^Debug_UI,
+	player:          Player,
+	input:           InputState,
 }
 
 init :: proc "c" () {
@@ -102,6 +109,10 @@ init :: proc "c" () {
 
 	// init camera
 	state.camera = init_camera(sapp.widthf() / sapp.heightf())
+
+	// Init texture cache
+	state.textures = Texture_Manager{}
+	texture_manager_init(&state.textures)
 
 	// Skybox
 	state.sky = init_sky()
@@ -144,6 +155,8 @@ init :: proc "c" () {
 	// Display Pipeline setup
 	offscreen_img, offscreen_depth_img := init_offscreen_renderer()
 	init_display_renderer(offscreen_img, offscreen_depth_img)
+
+	state.decals = init_decals(&offscreen_depth_img)
 
 	state.world = {
 		time_multiplier = 1.0,
@@ -210,6 +223,8 @@ frame :: proc "c" () {
 		fps,
 		t,
 	)
+	sdtx.printf("SB %d\n", state.meshes.models[0].animator.skin_mats_buffer.id)
+
 
 	// Increment time
 	if !state.debug_ui.active {
@@ -227,27 +242,31 @@ frame :: proc "c" () {
 	}
 
 	// Pass 1: Render to texture
-	sg.begin_pass(
-		{action = state.offscreen.pass.action, attachments = state.offscreen.pass.attachments},
-	)
+	sg.begin_pass(state.offscreen.pass)
 
 	// SKY & stars (this doesnt write to the depth buffer, so we draw it first)
 	update_sun(&state.stars, state.sky.state)
 	draw_sky(&state.sky, &state.camera, t)
-	draw_stars(&state.stars, &state.camera, state.world.time_of_day)
+	//draw_stars(&state.stars, &state.camera, state.world.time_of_day)
 
 	// Terrain
 	draw_terrain(&state.terrain, &state.camera)
 
-	draw_static_meshes(&state.static_meshes, &state.camera, t)
-	draw_meshes(&state.meshes, &state.camera, t)
+	//draw_static_meshes(&state.static_meshes, &state.camera, t)
+	//draw_animated_meshes(&state.meshes, &state.camera, t)
+
 
 	// Billboards
 	draw_billboards(&state.billboards, &state.camera)
 
-	draw_particle_system(state.particles, state.camera, t)
+	//draw_particle_system(state.particles, state.camera, t)
 
 	sg.end_pass()
+
+	sg.begin_pass(state.offscreen_decal.pass)
+	draw_decals(&state.decals, &state.camera, t)
+	sg.end_pass()
+
 
 	// pass 2: Displaying and scaling render texture
 	sg.begin_pass({action = state.display.pass, swapchain = sglue.swapchain()})
@@ -361,7 +380,8 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 
 	depth_img := sg.make_image(
 		{
-			usage = {depth_stencil_attachment = true},
+			label = "depth_img",
+			usage = {depth_stencil_attachment = true, immutable = false},
 			width = OFFSCREEN_WIDTH,
 			height = OFFSCREEN_HEIGHT,
 			sample_count = 1,
@@ -386,6 +406,15 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 			},
 		},
 		depth = {load_action = .CLEAR, clear_value = 1.0},
+	}
+
+	// decal pass
+	state.offscreen_decal.pass.label = "decals"
+	state.offscreen_decal.pass.attachments.colors[0] = sg.make_view(
+		{color_attachment = {image = color_img}},
+	)
+	state.offscreen_decal.pass.action = {
+		colors = {0 = {load_action = .LOAD}},
 	}
 
 	return color_img, depth_img

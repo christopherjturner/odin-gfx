@@ -8,12 +8,65 @@ import "core:strings"
 import sg "./sokol/gfx"
 import img "vendor:stb/image"
 
-load_texture :: proc(filename: cstring) -> sg.Image {
+Texture_Manager :: struct {
+	textures: map[string]sg.Image,
+}
+
+texture_manager_init :: proc(tm: ^Texture_Manager) {
+	tm.textures = make(map[string]sg.Image)
+}
+
+texture_manager_destroy :: proc(tm: ^Texture_Manager) {
+	for path, img in tm.textures {
+		sg.destroy_image(img)
+	}
+	delete(tm.textures)
+}
+
+get_texture :: proc(tm: ^Texture_Manager, path: string) -> sg.Image {
+	if img, exists := tm.textures[path]; exists {
+		return img
+	}
+
+	new_img, ok := load_texture(strings.clone_to_cstring(path, context.temp_allocator))
+ 	if ok {
+		tm.textures[strings.clone(path)] = new_img
+	} else {
+		// TODO: work out how to handle the error better
+		panic(fmt.tprintf("image failed to load %s", path))
+	}
+
+	return new_img
+}
+
+get_array_texture :: proc(tm: ^Texture_Manager, path: string) -> sg.Image {
+	if img, exists := tm.textures[path]; exists {
+		return img
+	}
+
+	if !os.is_dir(path) {
+		fmt.printfln("failed to load array textures %s is not a dir", path)
+		panic(fmt.tprintf("failed to load array textures %s is not a dir", path))
+	}
+
+	new_img, ok := load_array_texture_dir(path)
+	if ok {
+		tm.textures[strings.clone(path)] = new_img
+	} else {
+		panic(fmt.tprintf("image failed to load %s", path))
+	}
+
+	return new_img
+}
+
+load_texture :: proc(path: cstring) -> (sg.Image, bool) {
 
 	t_width, t_height, t_chan: i32
-	pixels := img.load(filename, &t_width, &t_height, &t_chan, 4)
+	pixels := img.load(path, &t_width, &t_height, &t_chan, 4)
 	if pixels == nil {
-		panic(fmt.tprintf("image failed to load %s", filename))
+		fmt.printfln("image failed to load %s", path)
+		//panic("failed to load image")
+		return sg.Image{}, false
 	}
 	defer img.image_free(pixels)
 
@@ -27,12 +80,12 @@ load_texture :: proc(filename: cstring) -> sg.Image {
 		ptr  = pixels,
 		size = uint(t_width * t_height * 4),
 	}
-	fmt.printf("Loaded: %s [%d %d %d]\n", filename, t_width, t_height, t_chan)
-	return sg.make_image(img_desc)
+	fmt.printf("Loaded: %s [%d %d %d]\n", path, t_width, t_height, t_chan)
+	return sg.make_image(img_desc), true
 }
 
 
-load_array_texture_dir :: proc(path: string) -> []cstring {
+load_array_texture_dir :: proc(path: string) -> (sg.Image, bool) {
 
 	files, err := os.read_directory_by_path(path, 0, context.allocator)
 
@@ -45,7 +98,7 @@ load_array_texture_dir :: proc(path: string) -> []cstring {
 
 	for file in files {
 		if os.is_file(file.fullpath) && strings.has_suffix(file.name, ".png") {
-			cpath, err := strings.clone_to_cstring(file.fullpath)
+			cpath, err := strings.clone_to_cstring(file.fullpath, context.temp_allocator)
 			if err != nil {
 				panic("failed to clone string")
 			}
@@ -54,12 +107,13 @@ load_array_texture_dir :: proc(path: string) -> []cstring {
 	}
 
 	if len(layers) == 0 {
-		panic(fmt.tprintf("invalid array texture,  %s, contains no images", path))
+		fmt.printfln("invalid array texture,  %s, contains no images", path)
+		return sg.Image{}, false
 	}
-	return layers[:]
+	return load_array_texture(layers[:])
 }
 
-load_array_texture :: proc(paths: []cstring) -> sg.Image {
+load_array_texture :: proc(paths: []cstring) -> (sg.Image, bool) {
 
 	assert(len(paths) > 0, "Invalid array texture, no paths provided")
 	// TODO: query gfx and check its doesn't exceed max array texture size
@@ -105,5 +159,5 @@ load_array_texture :: proc(paths: []cstring) -> sg.Image {
 		size = uint(total_size),
 	}
 
-	return sg.make_image(img_desc)
+	return sg.make_image(img_desc), true
 }

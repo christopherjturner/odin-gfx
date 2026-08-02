@@ -19,6 +19,7 @@ shaders=(
   aabbshader
   particles
   cpuparticles
+  decalshader
 )
 
 compile_shader() {

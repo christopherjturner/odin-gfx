@@ -26,6 +26,7 @@ AnimatedMeshVert :: struct {
 AnimatedMesh :: struct {
 	vertex_buffer: sg.Buffer,
 	index_buffer:  sg.Buffer,
+	pose:          []Pose,
 	index_count:   i32,
 	skeleton:      Skeleton,
 	animations:    []Animation,
@@ -77,7 +78,7 @@ AABB :: struct {
 	max: [3]f32,
 }
 
-load_mesh :: proc(filename: cstring) -> ^AnimatedMesh {
+load_animated_mesh :: proc(filename: cstring) -> ^AnimatedMesh {
 	options: cgltf.options
 	mesh := new(AnimatedMesh)
 
@@ -95,13 +96,16 @@ load_mesh :: proc(filename: cstring) -> ^AnimatedMesh {
 
 	node_to_joint := make(map[^cgltf.node]int)
 	defer delete(node_to_joint)
+
+	joint_count := len(data.skins[0].joints)
+
 	for j, i in data.skins[0].joints {
 		node_to_joint[j] = i
 	}
 
 	// Load joints/bones
-	mesh.skeleton.joints = make([]Joint, len(data.skins[0].joints))
-	mesh.skeleton.rest_pose = make([]Pose, len(data.skins[0].joints))
+	mesh.skeleton.joints = make([]Joint, joint_count)
+	mesh.skeleton.rest_pose = make([]Pose, joint_count)
 
 	for j, i in data.skins[0].joints {
 
