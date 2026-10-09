@@ -4,8 +4,8 @@ import "core:fmt"
 import "core:math/linalg/glsl"
 
 import "./shaders"
+import "./shapes"
 import sg "./sokol/gfx"
-import sgl "./sokol/gl"
 
 Grid_Vertex :: struct {
 	pos:   [3]f32,
@@ -60,10 +60,6 @@ create_grid :: proc() -> (sg.Buffer, i32) {
 
 MAX_DEBUG_AABB :: 32
 
-AABB_Vertex :: struct {
-	pos: [3]f32,
-}
-
 AABB_Instance :: struct {
 	aabb_min: [3]f32,
 	aabb_max: [3]f32,
@@ -77,94 +73,14 @@ AABB_Debug_Renderer :: struct {
 	bind:      sg.Bindings,
 	instances: [dynamic]AABB_Instance,
 }
-
-// 8 corners of a unit cube (0 to 1)
-unit_cube_vertices := [8]AABB_Vertex {
-	{{0, 0, 0}},
-	{{1, 0, 0}},
-	{{1, 1, 0}},
-	{{0, 1, 0}}, // 3
-	{{0, 0, 1}}, // 4
-	{{1, 0, 1}}, // 5
-	{{1, 1, 1}}, // 6
-	{{0, 1, 1}}, // 7
-}
-
-// 12 lines (24 indices) to form the wireframe
-unit_cube_indices := [24]u16 {
-	0,
-	1,
-	1,
-	2,
-	2,
-	3,
-	3,
-	0, // Bottom
-	4,
-	5,
-	5,
-	6,
-	6,
-	7,
-	7,
-	4, // Top
-	0,
-	4,
-	1,
-	5,
-	2,
-	6,
-	3,
-	7, // Vertical pillars
-}
-
-full_cube_indices := [36]u16 {
-	0,
-	1,
-	2,
-	2,
-	3,
-	0, // front
-	4,
-	5,
-	6,
-	6,
-	7,
-	4, // back
-	4,
-	0,
-	3,
-	3,
-	7,
-	4, // left
-	1,
-	5,
-	6,
-	6,
-	2,
-	1, // right
-	3,
-	2,
-	6,
-	6,
-	7,
-	3, // top
-	4,
-	5,
-	1,
-	1,
-	0,
-	4, // bottom
-}
-
-init_aabb_renderer :: proc() -> ^AABB_Debug_Renderer {
-	aabb_debug_renderer := new(AABB_Debug_Renderer)
+init_aabb_renderer :: proc() -> AABB_Debug_Renderer {
+	aabb_debug_renderer: AABB_Debug_Renderer
 
 	aabb_debug_renderer.bind.vertex_buffers[0] = sg.make_buffer(
 		{
 			data = {
-				ptr = &unit_cube_vertices[0],
-				size = len(unit_cube_vertices) * size_of(AABB_Vertex),
+				ptr = &shapes.unit_cube_vertices[0],
+				size = len(shapes.unit_cube_vertices) * size_of(shapes.Vertex_Pos),
 			},
 			label = "aabb-vertex-buffer",
 		},
@@ -173,7 +89,10 @@ init_aabb_renderer :: proc() -> ^AABB_Debug_Renderer {
 	aabb_debug_renderer.bind.index_buffer = sg.make_buffer(
 		{
 			usage = {index_buffer = true},
-			data = {ptr = &unit_cube_indices[0], size = len(unit_cube_indices) * size_of(u16)},
+			data = {
+				ptr = &shapes.unit_cube_indices[0],
+				size = len(shapes.unit_cube_indices) * size_of(u16),
+			},
 		},
 	)
 
@@ -190,7 +109,7 @@ init_aabb_renderer :: proc() -> ^AABB_Debug_Renderer {
 			shader = sg.make_shader(shaders.aabb_shader_desc(sg.query_backend())),
 			layout = {
 				buffers = {
-					0 = {stride = size_of(AABB_Vertex)},
+					0 = {stride = size_of(shapes.Vertex_Pos)},
 					1 = {stride = size_of(AABB_Instance), step_func = .PER_INSTANCE},
 				},
 				attrs = {

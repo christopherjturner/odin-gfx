@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:math/linalg/glsl"
 
 import "shaders"
+import "shapes"
+
 import sg "sokol/gfx"
 
 // TODO:
@@ -12,7 +14,7 @@ import sg "sokol/gfx"
 // 3. create decal instances instead of a single hard-coded one
 
 Decal :: struct {
-	transform: Transform,
+	transform:     Transform,
 	texture_index: int,
 }
 
@@ -46,8 +48,8 @@ init_decals :: proc(depth_tex: ^sg.Image) -> Decal_Render {
 	decals.bind.vertex_buffers[0] = sg.make_buffer(
 		{
 			data = {
-				ptr = &unit_cube_vertices[0],
-				size = len(unit_cube_vertices) * size_of(AABB_Vertex),
+				ptr = &shapes.unit_cube_vertices[0],
+				size = len(shapes.unit_cube_vertices) * size_of(shapes.Vertex_Pos),
 			},
 			label = "decal-vertex-buffer",
 		},
@@ -56,7 +58,10 @@ init_decals :: proc(depth_tex: ^sg.Image) -> Decal_Render {
 	decals.bind.index_buffer = sg.make_buffer(
 		{
 			usage = {index_buffer = true},
-			data = {ptr = &full_cube_indices[0], size = len(full_cube_indices) * size_of(u16)},
+			data = {
+				ptr = &shapes.full_cube_indices[0],
+				size = len(shapes.full_cube_indices) * size_of(u16),
+			},
 		},
 	)
 
@@ -123,7 +128,7 @@ draw_decals :: proc(decal_renderer: ^Decal_Render, cam: ^Camera, dt: f32) {
 	fs_uniforms := shaders.Decal_Fs_Params {
 		u_inv_view_proj  = transmute([16]f32)inv_vp,
 		u_world_to_decal = transmute([16]f32)inv_model,
-		u_screen_size    = {640, 480},
+		u_screen_size    = {OFFSCREEN_WIDTH, OFFSCREEN_HEIGHT},
 	}
 
 	sg.apply_pipeline(decal_renderer.pip)
@@ -137,5 +142,5 @@ draw_decals :: proc(decal_renderer: ^Decal_Render, cam: ^Camera, dt: f32) {
 		{ptr = &fs_uniforms, size = size_of(fs_uniforms)},
 	)
 
-	sg.draw(0, len(full_cube_indices), 1)
+	sg.draw(0, len(shapes.full_cube_indices), 1)
 }

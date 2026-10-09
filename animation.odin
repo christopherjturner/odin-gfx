@@ -57,10 +57,10 @@ update_animation :: proc(model: ^AnimatedModel, dt: f32) {
 	}
 	model.animator.last_update = 0
 
-
 	skeleton := &model.mesh.skeleton
 	model.animator.animation_time += dt
 
+	// TODO: these are hard-coded to extract the flap bit of the bird animation
 	frame_start: f32 = 1.0
 	frame_end: f32 = 1.5
 	frame_time := frame_start + glsl.mod(model.animator.animation_time, frame_end - frame_start)

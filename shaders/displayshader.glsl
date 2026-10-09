@@ -31,6 +31,7 @@ layout(binding=0) uniform display_fs_params {
   vec4 fog_color;
   float fog_start;
   float fog_end;
+  float time;
 };
 
 layout(binding=0) uniform texture2D dtex;
@@ -38,6 +39,9 @@ layout(binding=0) uniform sampler dsmp;
 
 layout(binding=1) uniform texture2D depthTex;
 layout(binding=1) uniform sampler depthSmp;
+
+layout(binding=2) uniform texture2D noiseTex;
+layout(binding=2) uniform sampler noiseSmp;
 
 in vec2 uv;
 out vec4 frag_color;
@@ -144,10 +148,10 @@ void main() {
 
   // Pixel perfect scaling
   // Disable to get a blury CRT style.
-  /* srcUV = gl_FragCoord.xy * inv_resolution;
-  vec2 tex_size = vec2(textureSize(sampler2D(dtex, dsmp), 0));
-  srcUV = (floor(srcUV * tex_size) + 0.5) / tex_size;
-  */
+  // srcUV = gl_FragCoord.xy * inv_resolution;
+  //vec2 tex_size = vec2(textureSize(sampler2D(dtex, dsmp), 0));
+  //srcUV = (floor(srcUV * tex_size) + 0.5) / tex_size;
+
   // depth buffer
   float depth = texture(sampler2D(depthTex, depthSmp), srcUV).r;
 
@@ -156,16 +160,36 @@ void main() {
   // Fog
   if (depth < 0.9999999) {
     float dist = linearize_depth(depth);
-    float fog_factor = clamp( (dist - fog_start) / (fog_end - fog_start ), 0.0, 0.7);
-    color = mix(color, fog_color.rgb, fog_factor * 0);
+    //float fog_factor = clamp( (dist - fog_start) / (fog_end - fog_start ), 0.0, 0.7);
+    //color = mix(color, fog_color.rgb, fog_factor * 0);
+
+    float near = 0.1;
+    float far = 100.0;
+    float z_ndc = depth * 2.0 - 1.0;
+    float linear_depth = (2.0 * near * far) / (far + near - z_ndc * (far - near));
+    float visible_depth = linear_depth / far; // Scale down for visualization
+
+
+    // apply atmospheric particles
+    float noise_scale = mix(10.0, 100.0, visible_depth);
+    float noise_amount = mix(0.02, 0.15, visible_depth);
+
+    // jank noise, swap out for texture or something later
+
+    vec2 dustUV = srcUV;
+    dustUV.x += (time * 0.1);
+    float static_noise = fract(sin(dot((dustUV) * noise_scale, vec2(12.9898, 78.233))) * 43758.5453);
+
+    if (static_noise > 0.8) {
+        color.rgb = color.rgb + (static_noise * noise_amount);
+    }
+    //color.rgb = vec3(static_noise);
   }
 
   // Colour pop
   //float luma = dot(color, vec3(0.299, 0.587, 0.114));
   //color = mix(vec3(luma), color, 1.115);
   //color = clamp(color, 0.0, 1.0);
-
-
   // looks very VGA, a bit too much?
   //color = quantize666(color, gl_FragCoord.xy);
   //color = quantize666(color, srcPixel.xy);
@@ -174,7 +198,6 @@ void main() {
   //color = quantAndDither(color, srcPixel.xy);
   // Final Color
   frag_color = vec4(color, 1.0);
-
 }
 
 @end

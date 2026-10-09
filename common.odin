@@ -3,6 +3,7 @@ package main
 import "core:math"
 import "core:math/linalg"
 import "core:math/linalg/glsl"
+import "core:math/noise"
 import "core:math/rand"
 
 Transform :: struct {
@@ -108,4 +109,40 @@ rand_direction_in_cone :: proc(forward_dir: [3]f32, half_angle_rad: f32) -> [3]f
 	out_dir.z = right.z * local_dir.x + up_prime.z * local_dir.y + dir.z * local_dir.z
 
 	return out_dir
+}
+
+
+curl_noise_2d :: proc(seed: i64, coord: [2]f32) -> [2]f32 {
+	eps :: 0.0001
+
+	result: [2]f32
+	dx := noise.noise_2d(seed, {f64(coord[0]) + eps, f64(coord[1])})
+	dy := noise.noise_2d(seed, {f64(coord[0]) - eps, f64(coord[1])})
+	result[1] = -((dx - dy) / (2 * eps))
+
+	dx = noise.noise_2d(seed, {f64(coord[0]), f64(coord[1]) + eps})
+	dy = noise.noise_2d(seed, {f64(coord[0]), f64(coord[1]) - eps})
+	result[0] = (dx - dy) / (2 * eps)
+
+	return [2]f32{(dx - dy), (dx - dy)} / (2 * eps)
+}
+
+noise_vector :: proc(seed: i64, p: [3]f64) -> [3]f32 {
+	noise3 :: noise.noise_3d_improve_xy
+	return [3]f32 {
+		noise3(seed, p),
+		noise3(seed, p + [3]f64{31.416, 47.853, 12.793}),
+		noise3(seed, p + [3]f64{19.173, 5.927, 83.421}),
+	}
+}
+
+curl_noise_3d :: proc(seed: i64, coord: [3]f32) -> Vec3 {
+	eps :: 0.0001
+
+	p := [3]f64{f64(coord.x), f64(coord.y), f64(coord.z)}
+	dx := noise_vector(seed, p + [3]f64{eps, 0, 0}) - noise_vector(seed, p - [3]f64{eps, 0, 0})
+	dy := noise_vector(seed, p + [3]f64{0, eps, 0}) - noise_vector(seed, p - [3]f64{0, eps, 0})
+	dz := noise_vector(seed, p + [3]f64{0, 0, eps}) - noise_vector(seed, p - [3]f64{0, 0, eps})
+
+	return Vec3{(dy.z - dz.y), (dz.x - dx.z), (dx.y - dy.x)} / (2 * eps)
 }

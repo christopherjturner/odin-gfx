@@ -1,4 +1,4 @@
-package "shapes"
+package shapes
 
 Vertex_Pos :: struct {
 	pos: [3]f32,

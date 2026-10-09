@@ -21,8 +21,9 @@ check_aabb_aabb :: proc(a: AABB, b: AABB) -> bool {
 	return true
 }
 
-check_aabb_sphere :: proc(a: AABB, b: Sphere) {
-
+check_aabb_sphere :: proc(a: AABB, b: Sphere) -> bool {
+	nearest_point := glsl.max(a.min, glsl.min(a.max, b.pos))
+	return glsl.distance_vec3(nearest_point, b.pos) < (b.radius * b.radius)
 }
 
 check_sphere_sphere :: proc(a: Sphere, b: Sphere) -> bool {

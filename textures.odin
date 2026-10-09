@@ -29,7 +29,7 @@ get_texture :: proc(tm: ^Texture_Manager, path: string) -> sg.Image {
 	}
 
 	new_img, ok := load_texture(strings.clone_to_cstring(path, context.temp_allocator))
- 	if ok {
+	if ok {
 		tm.textures[strings.clone(path)] = new_img
 	} else {
 		// TODO: work out how to handle the error better

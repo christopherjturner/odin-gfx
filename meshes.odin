@@ -58,6 +58,7 @@ Static_Mesh_Renderer :: struct {
 }
 
 
+// Not currently used
 MegaBuffer :: struct {
 	vertex_buffer: sg.Buffer,
 	index_buffer:  sg.Buffer,
@@ -96,7 +97,6 @@ init_meshes :: proc() -> Mesh_Renderer {
 		{storage_buffer = {buffer = mesh_renderer.models[0].animator.skin_mats_buffer}},
 	)
 
-	// TODO: generalize texture loading
 	texture := get_texture(&state.textures, "./assets/meshes/pigeon1/textures/my_67_baseColor.png")
 	mesh_renderer.bind.views[shaders.VIEW_mesh_tex] = sg.make_view({texture = {image = texture}})
 	mesh_renderer.bind.samplers[shaders.SMP_mesh_smp] = sg.make_sampler({})
@@ -144,7 +144,7 @@ draw_animated_meshes :: proc(mesh_renderer: ^Mesh_Renderer, camera: ^Camera, dt:
 	}
 	sg.apply_uniforms(shaders.UB_mesh_vs_params, {ptr = &vs_uniforms, size = size_of(vs_uniforms)})
 	sg.draw(0, mesh_renderer.models[0].mesh.index_count, 1)
-	add_aabb(state.aabb, mesh_renderer.models[0].mesh.aabb, mesh_renderer.models[0].transform)
+	add_aabb(&state.aabb, mesh_renderer.models[0].mesh.aabb, mesh_renderer.models[0].transform)
 }
 
 
@@ -217,7 +217,7 @@ draw_static_meshes :: proc(static_mesh_renderer: ^Static_Mesh_Renderer, camera: 
 	)
 	sg.draw(0, static_mesh_renderer.models[0].mesh.index_count, 1)
 	add_aabb(
-		state.aabb,
+		&state.aabb,
 		static_mesh_renderer.models[0].mesh.aabb,
 		static_mesh_renderer.models[0].transform,
 	)

@@ -3,10 +3,7 @@ package main
 import "base:runtime"
 import "core:fmt"
 import "core:math/linalg/glsl"
-import "core:math/rand"
 import "core:mem"
-import "core:path/slashpath"
-
 
 import sg "./sokol/gfx"
 import sgl "./sokol/gl"
@@ -15,7 +12,6 @@ import slog "./sokol/log"
 import sapp "./sokol/app"
 import sdtx "./sokol/debugtext"
 import sglue "./sokol/glue"
-
 
 import "./shaders"
 
@@ -59,7 +55,7 @@ state: struct {
 		bind:  sg.Bindings,
 		count: i32,
 	},
-	aabb:            ^AABB_Debug_Renderer,
+	aabb:            AABB_Debug_Renderer,
 	world:           struct {
 		game_time:       f32,
 		time_of_day:     f32,
@@ -159,7 +155,7 @@ init :: proc "c" () {
 	state.decals = init_decals(&offscreen_depth_img)
 
 	state.world = {
-		time_multiplier = 1.0,
+		time_multiplier = 0.01,
 		fog_start       = 50,
 		fog_end         = 250,
 	}
@@ -168,7 +164,9 @@ init :: proc "c" () {
 	state.game_ui = init_game_ui()
 	state.debug_ui = init_debug_ui()
 
+
 	fmt.printfln("Who/what is podgin?")
+	free_all(context.temp_allocator)
 }
 
 
@@ -223,14 +221,9 @@ frame :: proc "c" () {
 		fps,
 		t,
 	)
-	sdtx.printf("SB %d\n", state.meshes.models[0].animator.skin_mats_buffer.id)
-
 
 	// Increment time
-	if !state.debug_ui.active {
-		state.world.game_time += (t * state.world.time_multiplier)
-		state.world.time_of_day = glsl.mod(0.5 + (state.world.game_time * 0.01), 1.0)
-	}
+	update_world(t)
 
 	// Match the clear color to the sky
 	sky_col := state.sky.state.now.horizon_color
@@ -257,15 +250,16 @@ frame :: proc "c" () {
 
 
 	// Billboards
-	draw_billboards(&state.billboards, &state.camera)
+	//draw_billboards(&state.billboards, &state.camera)
 
 	//draw_particle_system(state.particles, state.camera, t)
 
 	sg.end_pass()
 
-	sg.begin_pass(state.offscreen_decal.pass)
-	draw_decals(&state.decals, &state.camera, t)
-	sg.end_pass()
+	// Pass 1.1 : where we use the depth buffer for stuff.
+	//sg.begin_pass(state.offscreen_decal.pass)
+	//draw_decals(&state.decals, &state.camera, t)
+	//sg.end_pass()
 
 
 	// pass 2: Displaying and scaling render texture
@@ -283,8 +277,8 @@ frame :: proc "c" () {
 		sapp.lock_mouse(true)
 	}
 
-	draw_debug_aabb(state.aabb, &state.camera)
-	flush_aabb(state.aabb)
+	draw_debug_aabb(&state.aabb, &state.camera)
+	flush_aabb(&state.aabb)
 	//draw_game_ui(state.game_ui)
 	sg.end_pass()
 
@@ -324,6 +318,7 @@ main :: proc() {
 
 	perm_backing_buffer := make([]u8, 64 * MB)
 	defer delete(perm_backing_buffer)
+
 	perm_arena: mem.Arena
 	mem.arena_init(&perm_arena, perm_backing_buffer)
 	perm_allocator := mem.arena_allocator(&perm_arena)
@@ -336,8 +331,8 @@ main :: proc() {
 			frame_cb = frame,
 			cleanup_cb = cleanup,
 			event_cb = event,
-			width = 800,
-			height = 600,
+			//width = 800,
+			//height = 600,
 			sample_count = 0,
 			window_title = "podgin sim",
 			icon = {sokol_default = true},
@@ -381,7 +376,7 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 	depth_img := sg.make_image(
 		{
 			label = "depth_img",
-			usage = {depth_stencil_attachment = true, immutable = false},
+			usage = {depth_stencil_attachment = true},
 			width = OFFSCREEN_WIDTH,
 			height = OFFSCREEN_HEIGHT,
 			sample_count = 1,
@@ -389,7 +384,7 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 		},
 	)
 
-	// the offscreen render passes need a color and depth-stencil-attachment view
+	// offscreen low-res pass
 	state.offscreen.pass.attachments.colors[0] = sg.make_view(
 		{color_attachment = {image = color_img}},
 	)
@@ -398,6 +393,7 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 	)
 
 	sky_col := state.sky.state.now.horizon_color
+	state.offscreen.pass.label = "offscreen"
 	state.offscreen.pass.action = {
 		colors = {
 			0 = {
@@ -405,7 +401,7 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 				clear_value = {r = sky_col[0], g = sky_col[1], b = sky_col[2], a = 1.0},
 			},
 		},
-		depth = {load_action = .CLEAR, clear_value = 1.0},
+		depth = {load_action = .CLEAR, store_action = .STORE, clear_value = 1.0},
 	}
 
 	// decal pass
@@ -415,6 +411,7 @@ init_offscreen_renderer :: proc() -> (sg.Image, sg.Image) {
 	)
 	state.offscreen_decal.pass.action = {
 		colors = {0 = {load_action = .LOAD}},
+		depth = {load_action = .LOAD},
 	}
 
 	return color_img, depth_img
@@ -430,14 +427,22 @@ init_display_renderer :: proc(color_img: sg.Image, depth_img: sg.Image) {
 	)
 
 	state.display.bind.views[shaders.VIEW_tex] = sg.make_view({texture = {image = color_img}})
-
 	state.display.bind.views[shaders.VIEW_depthTex] = sg.make_view({texture = {image = depth_img}})
-
 	state.display.bind.samplers[shaders.SMP_smp] = sg.make_sampler(
 		{min_filter = .LINEAR, mag_filter = .LINEAR, wrap_u = .REPEAT, wrap_v = .REPEAT},
 	)
-
 	state.display.bind.samplers[shaders.SMP_depthSmp] = sg.make_sampler(
+		{
+			min_filter = .NEAREST,
+			mag_filter = .NEAREST,
+			wrap_u = .CLAMP_TO_EDGE,
+			wrap_v = .CLAMP_TO_EDGE,
+		},
+	)
+
+	noise_texture := get_texture(&state.textures, "./assets/textures/noise.png")
+	state.display.bind.views[2] = sg.make_view({texture = {image = noise_texture}})
+	state.display.bind.samplers[2] = sg.make_sampler(
 		{min_filter = .NEAREST, mag_filter = .NEAREST, wrap_u = .REPEAT, wrap_v = .REPEAT},
 	)
 
@@ -457,6 +462,7 @@ draw_display_renderer :: proc() {
 		fog_color      = state.sky.state.now.horizon_color,
 		fog_start      = state.world.fog_start,
 		fog_end        = state.world.fog_end,
+		time           = f32(sapp.frame_duration()),
 	}
 	sg.apply_uniforms(
 		shaders.UB_display_fs_params,
@@ -464,4 +470,12 @@ draw_display_renderer :: proc() {
 	)
 
 	sg.draw(0, 3, 1)
+}
+
+
+update_world :: proc(t: f32) {
+	if !state.debug_ui.active {
+		state.world.game_time += (t * state.world.time_multiplier)
+		state.world.time_of_day = glsl.mod(0.5 + (state.world.game_time * 0.01), 1.0)
+	}
 }

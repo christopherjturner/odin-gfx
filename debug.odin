@@ -3,13 +3,16 @@ package main
 import "base:runtime"
 import "core:fmt"
 import "core:strconv"
+import "vendor:stb/rect_pack"
 
 import sapp "./sokol/app"
 import sg "./sokol/gfx"
 import sgl "./sokol/gl"
 import mu "vendor:microui"
 
+
 Debug_UI :: struct {
+	active:     bool,
 	pip:        sgl.Pipeline,
 	mu_ctx:     mu.Context,
 	bg:         mu.Color,
@@ -17,7 +20,6 @@ Debug_UI :: struct {
 	atlas_view: sg.View,
 	atlas_smp:  sg.Sampler,
 	key_map:    map[sapp.Keycode]mu.Key,
-	active:     bool,
 	particles:  ^GpuEmitter,
 }
 
@@ -100,8 +102,8 @@ draw_debug_ui :: proc(debug_ui: ^Debug_UI) {
 
 	mu_ctx := &debug_ui.mu_ctx
 	mu.begin(mu_ctx)
-	layout_debug_ui(mu_ctx)
-	//layout_particle_ui(mu_ctx)
+	//layout_debug_ui(mu_ctx)
+	layout_particle_ui(mu_ctx)
 	mu.end(mu_ctx)
 
 	r_begin(sapp.width(), sapp.height(), debug_ui)
@@ -140,7 +142,6 @@ debug_ui_input :: proc "c" (ev: ^sapp.Event, debug_ui: ^Debug_UI) {
 		mu.input_scroll(mu_ctx, 0, i32(ev.scroll_y))
 	case .KEY_DOWN:
 		if ev.key_code in debug_ui.key_map {
-			fmt.printfln("key down, %v", ev.key_code)
 			mu.input_key_down(mu_ctx, debug_ui.key_map[ev.key_code])
 		}
 	case .KEY_UP:
@@ -257,6 +258,16 @@ u8_slider :: proc(ctx: ^mu.Context, val: ^u8, lo, hi: u8) -> (res: mu.Result_Set
 	return
 }
 
+int_slider :: proc(ctx: ^mu.Context, val: ^int, lo, hi: int) -> (res: mu.Result_Set) {
+	mu.push_id(ctx, uintptr(val))
+	@(static) tmp: mu.Real
+	tmp = mu.Real(val^)
+	res = mu.slider(ctx, &tmp, mu.Real(lo), mu.Real(hi), 0, "%.0f", {.ALIGN_CENTER})
+	val^ = int(tmp)
+	mu.pop_id(ctx)
+	return
+}
+
 f32_slider :: proc(ctx: ^mu.Context, val: ^f32, lo, hi: f32) -> (res: mu.Result_Set) {
 	mu.push_id(ctx, uintptr(val))
 	@(static) tmp: mu.Real
@@ -287,7 +298,6 @@ int_input :: proc(ctx: ^mu.Context, val: ^int) -> (res: mu.Result_Set) {
 	return
 }
 
-
 f32_text_input :: proc(ctx: ^mu.Context, val: ^f32) -> (res: mu.Result_Set) {
 	mu.push_id(ctx, uintptr(val))
 
@@ -305,6 +315,32 @@ f32_text_input :: proc(ctx: ^mu.Context, val: ^f32) -> (res: mu.Result_Set) {
 	return
 }
 
+vec3_input :: proc(ctx: ^mu.Context, title: string, val: ^[3]f32) {
+	sw := i32(f32(mu.get_current_container(ctx).body.w) * 0.20)
+	mu.layout_row(ctx, {sw, sw, sw, sw, sw, -1})
+	mu.label(ctx, title)
+	f32_input(ctx, &val[0])
+	f32_input(ctx, &val[1])
+	f32_input(ctx, &val[2])
+}
+
+color_input :: proc(ctx: ^mu.Context, title: string, val: ^[4]f32) {
+	sw := i32(f32(mu.get_current_container(ctx).body.w) * 0.20)
+	mu.layout_row(ctx, {sw, sw, sw, sw, sw, -1})
+	color_sample(ctx, title, val^)
+	f32_slider(ctx, &val[0], 0.0, 1.0)
+	f32_slider(ctx, &val[1], 0.0, 1.0)
+	f32_slider(ctx, &val[2], 0.0, 1.0)
+	f32_slider(ctx, &val[3], 0.0, 1.0)
+}
+
+color_sample :: proc(ctx: ^mu.Context, text: string, val: [4]f32) {
+	rect := mu.layout_next(ctx)
+	mu.draw_control_text(ctx, text, {rect.x, rect.y, rect.w / 2, rect.h}, .TEXT)
+	col := vec4_color_to_color(val)
+	col.a = 255
+	mu.draw_rect(ctx, {rect.x + rect.w / 2, rect.y, rect.w / 2, rect.h}, col)
+}
 
 r_begin :: proc(disp_width, disp_height: i32, debug_ui: ^Debug_UI) {
 	sgl.defaults()
@@ -375,9 +411,11 @@ r_draw :: proc() {
 	sgl.draw()
 }
 
+vec4_color_to_color :: proc(col: [4]f32) -> mu.Color {
+	return mu.Color{u8(col[0] * 255), u8(col[1] * 255), u8(col[2] * 255), u8(col[3] * 255)}
+}
 
 // Particle UI
-/*
 layout_particle_ui :: proc(ctx: ^mu.Context) {
 	p := &state.particles.emitters[0]
 
@@ -390,50 +428,46 @@ layout_particle_ui :: proc(ctx: ^mu.Context) {
 		hw := i32(f32(mu.get_current_container(ctx).body.w) * 0.5)
 		fw := i32(f32(mu.get_current_container(ctx).body.w))
 
+		mu.layout_row(ctx, {sw, sw, sw, sw, -1})
+		mu.label(ctx, "emit_count")
+		int_input(ctx, &p.emit_count)
 
 		mu.layout_row(ctx, {sw, sw, sw, sw, -1})
-		mu.label(ctx, "Velocity")
-		f32_input(ctx, &p.velocity.x)
-		f32_input(ctx, &p.velocity.y)
-		f32_input(ctx, &p.velocity.z)
+		mu.label(ctx, "active_time_ms")
+		f32_slider(ctx, &p.active_time_ms, 0, 60)
 
 		mu.layout_row(ctx, {sw, sw, sw, sw, -1})
-		mu.label(ctx, "Velocity var")
-		f32_input(ctx, &p.velocity_variance.x)
-		f32_input(ctx, &p.velocity_variance.y)
-		f32_input(ctx, &p.velocity_variance.z)
+		mu.label(ctx, "rate")
+		f32_slider(ctx, &p.rate, 0, 200)
 
 		mu.layout_row(ctx, {sw, sw, sw, sw, -1})
-		mu.label(ctx, "gravity")
-		f32_input(ctx, &p.gravity.x)
-		f32_input(ctx, &p.gravity.y)
-		f32_input(ctx, &p.gravity.z)
+		mu.label(ctx, "base_ttl")
+		f32_slider(ctx, &p.base_ttl, 0, 120)
+
+		vec3_input(ctx, "dir", &p.dir)
+		vec3_input(ctx, "origin", &p.origin)
+		vec3_input(ctx, "gravity", &p.gravity)
 
 		mu.layout_row(ctx, {sw, sw, -1})
-		mu.label(ctx, "drag")
-		f32_slider(ctx, &p.drag, 0.0, 1.0)
+		mu.label(ctx, "ttl")
+		f32_input(ctx, &p.base_ttl)
 
 		mu.layout_row(ctx, {sw, sw, sw, -1})
-		mu.label(ctx, "lifetime")
-		f32_input(ctx, &p.lifetime_max)
-		f32_input(ctx, &p.lifetime_variance)
-		int_input(ctx, &p.count)
+		mu.label(ctx, "speed/drag")
+		f32_input(ctx, &p.speed)
+		f32_input(ctx, &p.drag)
 
-		mu.layout_row(ctx, {sw, sw, sw, sw, sw, sw, -1})
-		mu.label(ctx, "Color start (rgba)")
-		f32_slider(ctx, &p.color_start[0], 0.0, 1.0)
-		f32_slider(ctx, &p.color_start[1], 0.0, 1.0)
-		f32_slider(ctx, &p.color_start[2], 0.0, 1.0)
-		f32_slider(ctx, &p.color_start[3], 0.0, 1.0)
+		color_input(ctx, "start color", &p.start_color)
+		color_input(ctx, "End color", &p.end_color)
 
+		mu.layout_row(ctx, {sw, sw, -1})
+		mu.label(ctx, "scale start/end")
+		f32_slider(ctx, &p.start_scale, 0.0, 2.0)
+		f32_slider(ctx, &p.end_scale, 0.0, 2.0)
 
-		mu.layout_row(ctx, {sw, sw, sw, sw, sw, sw, -1})
-		mu.label(ctx, "Color end (rgba)")
-		f32_slider(ctx, &p.color_end[0], 0.0, 1.0)
-		f32_slider(ctx, &p.color_end[1], 0.0, 1.0)
-		f32_slider(ctx, &p.color_end[2], 0.0, 1.0)
-		f32_slider(ctx, &p.color_end[3], 0.0, 1.0)
+		mu.layout_row(ctx, {sw, sw, -1})
+		mu.label(ctx, "texture")
+		int_slider(ctx, &p.texture_id, 0, 2)
 
 	}
 }
-*/
